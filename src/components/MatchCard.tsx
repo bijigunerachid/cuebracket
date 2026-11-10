@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import type { Match, Player } from '../engine';
-import { C, styles } from '../ui';
+import { Avatar, C, StatusBadge, styles } from '../ui';
 
 export default function MatchCard({
   match,
@@ -16,41 +16,80 @@ export default function MatchCard({
     id === null
       ? match.status === 'bye'
         ? 'BYE'
-        : 'TBD'
+        : 'Awaiting player'
       : (players.find((player) => player.id === id)?.name ?? 'Unknown');
   const ready = !!onPress && match.status === 'pending' && match.p1 !== null && match.p2 !== null;
+  const bye = match.status === 'bye';
   return (
     <TouchableOpacity
       disabled={!ready}
       onPress={onPress}
       accessibilityRole={ready ? 'button' : 'text'}
       accessibilityState={{ disabled: !ready }}
-      accessibilityLabel={`${name(match.p1)} versus ${name(match.p2)}, ${match.status}${match.status === 'done' ? `, ${match.s1} to ${match.s2}` : ''}`}
-      style={styles.card}
+      accessibilityLabel={`${name(match.p1)} versus ${name(match.p2)}, ${match.status}${match.status === 'done' ? `, ${match.s1} to ${match.s2}, winner ${name(match.winner)}` : bye ? ', advances without playing' : ''}`}
+      style={[styles.card, ready && { borderColor: '#365E47' }]}
     >
-      <View style={[styles.row, { flexWrap: 'wrap' }]}>
+      <View style={[styles.row, { flexWrap: 'wrap', marginBottom: 16 }]}>
         <Text style={styles.muted}>
-          Round {match.round} · Match {match.slot + 1}
+          R{match.round} · Match {match.slot + 1}
         </Text>
-        <Text style={{ color: match.status === 'done' ? C.green : C.muted }}>
-          {match.status.toUpperCase()}
-        </Text>
+        <StatusBadge
+          label={
+            bye
+              ? 'Automatic advance'
+              : match.status === 'done'
+                ? 'Final result'
+                : ready
+                  ? 'Ready to play'
+                  : 'Awaiting opponents'
+          }
+          tone={bye ? 'muted' : match.status === 'done' ? 'gold' : 'green'}
+        />
       </View>
-      <View style={[styles.row, { marginTop: 10 }]}>
-        <Text style={[styles.text, { flex: 1 }]}>{name(match.p1)}</Text>
-        <Text style={{ color: C.green, fontWeight: '800' }}>
-          {match.status === 'done'
-            ? `${match.s1} – ${match.s2}`
-            : match.status === 'bye'
-              ? 'BYE'
-              : 'VS'}
-        </Text>
-        <Text style={[styles.text, { flex: 1, textAlign: 'right' }]}>{name(match.p2)}</Text>
-      </View>
-      {match.target != null ? (
-        <Text style={[styles.muted, { marginTop: 8 }]}>First to {match.target} racks/frames</Text>
-      ) : null}
-      {ready ? <Text style={[styles.muted, { marginTop: 8 }]}>Tap to enter result</Text> : null}
+      {[
+        { id: match.p1, score: match.s1 },
+        { id: match.p2, score: match.s2 },
+      ]
+        .filter((player) => !bye || player.id !== null)
+        .map((player, index) => (
+          <View key={index} style={[styles.row, { marginTop: index ? 12 : 0 }]}>
+            <Avatar name={name(player.id)} />
+            <Text
+              style={[
+                styles.text,
+                {
+                  flex: 1,
+                  fontWeight: match.winner === player.id && player.id !== null ? '700' : '500',
+                  color: match.winner === player.id && player.id !== null ? C.green : C.white,
+                },
+              ]}
+            >
+              {name(player.id)}
+            </Text>
+            {match.status === 'done' ? (
+              <Text
+                style={{
+                  color: match.winner === player.id ? C.green : C.muted,
+                  fontSize: 26,
+                  fontWeight: '700',
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {player.score}
+              </Text>
+            ) : null}
+            {match.winner === player.id && player.id !== null && !bye ? (
+              <Text accessibilityLabel="Winner" style={{ color: C.green }}>
+                ✓
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      <Text style={[styles.muted, { marginTop: 16 }]}>
+        {bye
+          ? 'BYE · No match played. No score recorded.'
+          : `${match.target != null ? `First to ${match.target} · ` : ''}${ready ? 'Enter result  →' : match.status === 'done' ? 'Score confirmed' : 'Waiting for the draw'}`}
+      </Text>
     </TouchableOpacity>
   );
 }

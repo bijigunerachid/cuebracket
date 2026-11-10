@@ -6,6 +6,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "androidNavigationBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#07110F",
+      "enforceContrast": false
+    },
     "android": {
       "package": "com.cuebracket.app",
       "edgeToEdgeEnabled": true

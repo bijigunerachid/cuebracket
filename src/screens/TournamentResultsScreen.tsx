@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import type { TournamentData } from '../components/TournamentRoute';
 import { tiedLeaders } from '../engine';
-import { Btn, C, Card, Page, styles } from '../ui';
+import { Btn, C, Card, Page, Reveal, SectionHeading, StatusBadge, styles } from '../ui';
 
 export default function TournamentResultsScreen({
   tournament,
@@ -24,25 +24,32 @@ export default function TournamentResultsScreen({
       : leaders.map((row) => row.player.name).join(' / ') || 'TBD';
   return (
     <Page title="Tournament Results" subtitle={tournament.name} onBack={onMatches}>
-      <Card>
-        <Text style={{ color: C.gold, fontSize: 18, textAlign: 'center' }}>
-          {unresolved ? 'TIED LEADERS - TIEBREAK REQUIRED' : 'CHAMPION'}
-        </Text>
-        <Text
-          style={{
-            color: C.white,
-            fontSize: 32,
-            fontWeight: '900',
-            textAlign: 'center',
-            marginTop: 12,
-          }}
-        >
-          {champion}
-        </Text>
-      </Card>
+      <Reveal change={tournament.id}>
+        <Card highlight>
+          <StatusBadge label="COMPETITION COMPLETE" tone="gold" />
+          <Text style={{ color: C.gold, fontSize: 18, textAlign: 'center' }}>
+            {unresolved ? 'TIED LEADERS - TIEBREAK REQUIRED' : 'CHAMPION'}
+          </Text>
+          <Text
+            style={{
+              color: C.white,
+              fontSize: 32,
+              fontWeight: '900',
+              textAlign: 'center',
+              marginTop: 12,
+            }}
+          >
+            {champion}
+          </Text>
+          <Text style={[styles.muted, { textAlign: 'center', marginTop: 20 }]}>
+            {players.length} players · {matches.filter((match) => match.status === 'done').length}{' '}
+            matches played
+          </Text>
+        </Card>
+      </Reveal>
       {tournament.format === 'round_robin' ? (
         <>
-          <Text style={styles.label}>FINAL STANDINGS</Text>
+          <SectionHeading title="Final standings" />
           {standings.map((row, index) => (
             <Card key={row.player.id}>
               <Text style={styles.text}>

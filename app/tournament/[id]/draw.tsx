@@ -18,20 +18,24 @@ export default function DrawRoute() {
           players={players}
           onBack={() => router.dismissTo(`${tournamentPath(tournament.id)}/players`)}
           onStart={(order) =>
-            Alert.alert('Start tournament?', 'The draw will be locked after starting.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Start',
-                onPress: () => {
-                  try {
-                    store.startTournament(tournament.id, order);
-                    router.dismissTo(tournamentPath(tournament.id));
-                  } catch (error) {
-                    errorAlert(error);
-                  }
+            Alert.alert(
+              'Step 6 of 6 · Start tournament?',
+              `${players.length} players · ${tournament.name}. Review complete? The draw and settings will lock after starting.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Start',
+                  onPress: () => {
+                    try {
+                      store.startTournament(tournament.id, order);
+                      router.dismissTo(tournamentPath(tournament.id));
+                    } catch (error) {
+                      errorAlert(error);
+                    }
+                  },
                 },
-              },
-            ])
+              ],
+            )
           }
         />
       )}

@@ -13,7 +13,11 @@ Normal tournament operation uses local storage and does not require an account o
 - Random BYE recipients and opponents for arbitrary player counts of at least two, manual assignment overrides, draw totals, and optional round-specific scoring.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
-- Home history includes name search, combined status/game filters, result counts, creation dates, and a Clear filters action. Filters stay selected while navigating within the current session and reset when the home screen is remounted; filtering never deletes stored events.
+- The Tournaments tab includes name search, combined status/game filters, result counts, creation dates, and Clear filters. Filters stay selected while navigating within the current session and reset when the library screen is remounted; filtering never deletes stored events.
+- Home, Tournaments, Players, and Settings bottom tabs, a guided setup flow, contextual action sheets, fixed primary actions, live progress, and accessible score controls share a premium dark emerald design system. Home statistics and pending matches come from stored events; no example data is inserted.
+
+The UI audit, design system, and Android acceptance checklist are documented in [docs/ui-ux.md](docs/ui-ux.md). This redesign changes presentation and navigation without altering SQLite schema or tournament algorithms.
+
 - Separate Expo Router screens, native Android back-stack navigation, visible back controls, focus-based data refresh, safe-area padding, and accessible controls with at least 48-point touch targets.
 
 ## Requirements
@@ -117,7 +121,7 @@ Before treating a release as ready:
 7. Repeat core flows in an installed APK with airplane mode enabled.
 8. Check hardware Back and visible Back controls through Home, Create, Details, Settings, Players, Draw, Score, and Results. Confirm returning to Home or Details refreshes changes, canceled scores are discarded, and deleted events disappear. Check keyboard behavior, long names, larger text, screen readers, small/large displays, and status/navigation bars. Open valid and invalid `cuebracket://tournament/<id>` links, an active event's edit link, and a completed match's score link; confirm unavailable or locked pages fail safely.
 9. Upgrade an installation containing existing tournaments and confirm native SQLite migration preserves results.
-10. On Home, search using mixed case and surrounding spaces, combine status and game filters, and try a search with no results. Clear filters to restore all events. Open an event and return, complete an event or delete it, and check that the refreshed list still respects the selected filters. Check dates, large text, keyboard dismissal, and screen-reader filter labels.
+10. In the Tournaments tab, search using mixed case and surrounding spaces, combine status and game filters, and try a search with no results. Clear filters to restore all events. Open an event and return, complete an event or delete it, and check that the refreshed list still respects the selected filters. Check dates, large text, keyboard dismissal, and screen-reader filter labels. Verify Home statistics and ready matches refresh, and test all bottom tabs and the setup wizard's hardware Back behavior.
 
 ## Build an Android APK
 
@@ -144,7 +148,9 @@ npx.cmd eas-cli build --platform android --profile production
 ```text
 app/
   _layout.tsx                 Router stack, database startup gate, and status bar
-  index.tsx                   Home route
+  (tabs)/                     Home, tournament library, player directory, app information
+    _layout.tsx               Android bottom-tab navigation
+    index.tsx                 Home route (URL remains /)
   create.tsx                  Tournament creation route
   +not-found.tsx              Invalid path recovery
   tournament/[id]/            Details, settings, players, draw, results routes
@@ -159,7 +165,11 @@ src/
   bracket.ts                 Pure bracket layout and connector geometry
   rules.ts                   Draw summaries, scoring targets, and round-stage rules
   migrations.ts              Additive scoring schema migration
-  screens/TournamentApp.tsx   Home and tournament history
+  theme.ts                    Shared colors, typography, spacing, touch and motion tokens
+  presentation.ts             Scoring labels and SQLite UTC date presentation
+  screens/TournamentApp.tsx   Home and searchable tournament library
+  screens/PlayerDirectoryScreen.tsx    Registrations grouped by tournament
+  screens/AppSettingsScreen.tsx        App, theme, and storage information
   screens/TournamentDetailScreen.tsx   Details, rounds, and standings
   screens/MatchScoreScreen.tsx         Responsive score controls
   screens/TournamentResultsScreen.tsx  Champion/tied leaders and final standings
@@ -170,6 +180,7 @@ src/
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
 tests/
+  presentation.cjs            Scoring/date display and text-token contrast checks
   rules.cjs                   Random BYE distribution and scoring-rule checks
   bracket.cjs                 Bracket geometry and font-scale layout checks
   navigation.cjs              Route validation and lifecycle guard checks
