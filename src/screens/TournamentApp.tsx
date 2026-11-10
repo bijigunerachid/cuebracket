@@ -1,20 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, BackHandler, Text, View, TouchableOpacity } from 'react-native';
-import { Page, Btn, Choice, Field, Card, C, styles, errorAlert } from '../ui';
+import { Page, Btn, Card, C, styles, errorAlert } from '../ui';
 import * as store from '../db';
 import PlayersScreen from './PlayersScreen';
 import DrawScreen from './DrawScreen';
-import { Game, Format, Match, winsNeeded, validateScore, tiedLeaders } from '../engine';
-type Screen = 'home' | 'create' | 'players' | 'draw' | 'detail' | 'score' | 'results';
+import TournamentSettingsScreen from './TournamentSettingsScreen';
+import { Match, TournamentSettings, winsNeeded, validateScore, tiedLeaders } from '../engine';
+type Screen = 'home' | 'create' | 'edit' | 'players' | 'draw' | 'detail' | 'score' | 'results';
 export default function TournamentApp() {
   const [screen, setScreen] = useState<Screen>('home');
   const [tid, setTid] = useState<number | null>(null);
   const [mid, setMid] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
-  const [name, setName] = useState('');
-  const [game, setGame] = useState<Game>('8ball');
-  const [format, setFormat] = useState<Format>('knockout');
-  const [best, setBest] = useState(5);
   const [s1, setS1] = useState(0);
   const [s2, setS2] = useState(0);
   const refresh = () => setTick((x) => x + 1);
@@ -26,7 +23,7 @@ export default function TournamentApp() {
   const pname = (id: number | null) => (id === null ? 'TBD' : names.get(id) || 'Unknown');
   const back = () => {
     if (screen === 'home') return false;
-    if (screen === 'score' || screen === 'results') setScreen('detail');
+    if (screen === 'score' || screen === 'results' || screen === 'edit') setScreen('detail');
     else if (screen === 'draw') setScreen('players');
     else setScreen('home');
     return true;
@@ -48,13 +45,17 @@ export default function TournamentApp() {
     setScreen('detail');
   };
   const startDraw = () => setScreen('draw');
-  const create = () =>
-    safe(() => {
-      const id = store.createTournament(name, game, format, best);
-      setTid(id);
-      setName('');
-      setScreen('players');
-    });
+  const create = (settings: TournamentSettings) => {
+    const id = store.createTournament(
+      settings.name,
+      settings.game,
+      settings.format,
+      settings.bestOf,
+    );
+    setTid(id);
+    refresh();
+    setScreen('players');
+  };
   const confirmStart = (drawOrder: number[]) =>
     Alert.alert('Start tournament?', 'The draw will be locked after starting.', [
       { text: 'Cancel', style: 'cancel' },
@@ -148,40 +149,26 @@ export default function TournamentApp() {
     );
   if (screen === 'create')
     return (
-      <Page title="New Tournament" subtitle="Set up your competition">
-        <Field
-          label="Tournament name"
-          value={name}
-          onChangeText={setName}
-          placeholder="Friday 8-Ball Cup"
-        />
-        <Text style={styles.label}>Game</Text>
-        <Choice
-          value={game}
-          onChange={setGame}
-          options={[
-            { label: '🎱 8-Ball', value: '8ball' },
-            { label: '🔴 Snooker', value: 'snooker' },
-          ]}
-        />
-        <Text style={styles.label}>Tournament format</Text>
-        <Choice
-          value={format}
-          onChange={setFormat}
-          options={[
-            { label: 'Knockout', value: 'knockout' },
-            { label: 'Round robin', value: 'round_robin' },
-          ]}
-        />
-        <Text style={styles.label}>Match length</Text>
-        <Choice
-          value={String(best)}
-          onChange={(x) => setBest(Number(x))}
-          options={[3, 5, 7, 9].map((x) => ({ label: `Best of ${x}`, value: String(x) }))}
-        />
-        <Btn title="Create & Add Players" onPress={create} />
-        <Btn title="Cancel" secondary onPress={() => setScreen('home')} />
-      </Page>
+      <TournamentSettingsScreen key="new" onSave={create} onCancel={() => setScreen('home')} />
+    );
+  if (screen === 'edit' && t)
+    return (
+      <TournamentSettingsScreen
+        key={t.id}
+        initial={t}
+        onSave={(settings) => {
+          store.updateTournament(
+            t.id,
+            settings.name,
+            settings.game,
+            settings.format,
+            settings.bestOf,
+          );
+          refresh();
+          setScreen('detail');
+        }}
+        onCancel={() => setScreen('detail')}
+      />
     );
   if (screen === 'players' && t)
     return (
@@ -239,6 +226,7 @@ export default function TournamentApp() {
         ) : null}
         {t.status === 'setup' ? (
           <>
+            <Btn title="Edit Tournament" onPress={() => setScreen('edit')} />
             <Btn title="Manage Players" onPress={() => setScreen('players')} />
             <Btn title="Generate Draw" onPress={startDraw} disabled={people.length < 2} />
           </>

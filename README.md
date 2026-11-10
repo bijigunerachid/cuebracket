@@ -6,7 +6,7 @@ Normal tournament operation uses local storage and does not require an account o
 
 ## Implemented features
 
-- Tournament creation and deletion, game selection, knockout or single round-robin format, and best-of-3/5/7/9 matches.
+- Tournament creation, setup editing, and deletion, game selection, knockout or single round-robin format, and best-of-3/5/7/9 matches.
 - Player registration, editing, and removal during setup, with blank-name and duplicate-name validation within each tournament.
 - Random draws and direct manual opponent selection, with a first-round preview for both formats and selectable knockout BYE recipients.
 - Automatic knockout BYEs, score recording, winner advancement, and round lists.
@@ -45,7 +45,7 @@ npx.cmd expo install --check
 npx.cmd expo config --type public
 ```
 
-The automated tests run against real in-memory SQLite through an adapter for the Expo SQLite API. They do not open the Android device database. Coverage includes legacy migration and result preservation, write constraints, transaction rollback, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
+The automated tests run against real in-memory SQLite through an adapter for the Expo SQLite API. They do not open the Android device database. Coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
 
 To check Android JavaScript bundling and Hermes compilation:
 
@@ -70,7 +70,7 @@ The first command formats files; the second checks them without writing changes.
 
 Before treating a release as ready:
 
-1. Create Pool and Snooker events using both formats and each match length.
+1. Create Pool and Snooker events using both formats and each match length. Open Edit Tournament before starting, change all settings, and confirm registered players remain unchanged. Test Cancel and hardware Back without saving, then reopen the form to verify the saved values. Confirm the draw and score target follow the updated settings; active and completed events must not offer editing.
 2. Add, rename, and remove players; confirm blank and duplicate names are rejected. Cancel an edit, navigate away and back, and check that no draft name is saved. Confirm player IDs and ordering remain unchanged after renaming.
 3. Create 5- and 6-player knockout events. In Manual mode, choose players in each match and BYE slot, check that assignments swap without duplicates, confirm the draw, and play through the final. Confirm that canceling the start dialog leaves the draft editable and that going back to Players discards the draft without starting the event.
 4. Complete an odd-player round robin and a scenario with tied leaders. Select first-round opponents and the resting player; verify everyone still meets once over the complete schedule. Switching from Manual to Random reshuffles the draft; review it before starting.
@@ -110,6 +110,7 @@ src/
   screens/TournamentApp.tsx   Tournament views and state-based navigation
   screens/PlayersScreen.tsx   Player registration and editing form
   screens/DrawScreen.tsx      Random draw preview and direct slot selection
+  screens/TournamentSettingsScreen.tsx  Shared creation and setup editing form
   db.ts                       SQLite schema, migration, CRUD, advancement, standings
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
@@ -129,7 +130,7 @@ Legacy knockout draws with empty first-round matches are flagged, but their draw
 
 - Player changes are allowed only during setup. Reusable player selection is not implemented. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
 - Manual draw assigns players by swapping occupied first-round slots. The number and bracket positions of knockout BYEs are automatic; their recipients can be chosen. Round robin lets you choose first-round opponents and the resting player, with later rounds generated automatically so every pair meets once. Unconfirmed draw drafts are discarded when leaving the draw screen.
-- Tournament settings cannot yet be edited after creation.
+- Tournament name, game, format, and match length can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; valid legacy match lengths remain available when editing.
 - Confirmed scores cannot be edited or undone.
 - Standings use alphabetical ordering only to display otherwise tied rows; ties require a manual resolution outside the application.
 - Knockout brackets use round lists rather than connected diagrams.

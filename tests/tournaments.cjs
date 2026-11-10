@@ -73,6 +73,126 @@ assert.throws(() =>
     "INSERT INTO tournaments(name,game,format,best_of) VALUES('Bad','invalid','knockout',5)",
   ),
 );
+const configurationId = store.createTournament('Original settings', '8ball', 'knockout', 3);
+for (const name of ['Config A', 'Config B', 'Config C']) store.addPlayer(configurationId, name);
+const originalConfiguration = store.tournament(configurationId);
+const configurationPlayers = store.participants(configurationId);
+const configurationRegistrations = sql
+  .prepare('SELECT * FROM tournament_players WHERE tournament_id=? ORDER BY position')
+  .all(configurationId);
+store.updateTournament(configurationId, '  Updated settings  ', 'snooker', 'round_robin', 7);
+const updatedConfiguration = store.tournament(configurationId);
+assert.equal(updatedConfiguration.name, 'Updated settings');
+assert.equal(updatedConfiguration.game, 'snooker');
+assert.equal(updatedConfiguration.format, 'round_robin');
+assert.equal(updatedConfiguration.best_of, 7);
+assert.equal(updatedConfiguration.id, originalConfiguration.id);
+assert.equal(updatedConfiguration.created_at, originalConfiguration.created_at);
+assert.equal(updatedConfiguration.status, 'setup');
+assert.deepEqual(store.participants(configurationId), configurationPlayers);
+assert.deepEqual(
+  sql
+    .prepare('SELECT * FROM tournament_players WHERE tournament_id=? ORDER BY position')
+    .all(configurationId),
+  configurationRegistrations,
+);
+assert.equal(store.matches(configurationId).length, 0);
+store.init();
+assert.deepEqual(store.tournament(configurationId), updatedConfiguration);
+for (const name of ['', '   ']) {
+  assert.throws(() => store.updateTournament(configurationId, name, '8ball', 'knockout', 5));
+}
+for (const best of [0, -1, 2, 1.5, NaN, Infinity]) {
+  assert.throws(() =>
+    store.updateTournament(configurationId, 'Invalid', '8ball', 'knockout', best),
+  );
+}
+assert.throws(() => store.updateTournament(configurationId, 'Invalid', 'invalid', 'knockout', 5));
+assert.throws(() => store.updateTournament(configurationId, 'Invalid', '8ball', 'invalid', 5));
+assert.deepEqual(store.tournament(configurationId), updatedConfiguration);
+assert.throws(() => store.updateTournament(999999, 'Missing', '8ball', 'knockout', 5), /not found/);
+
+const runBeforeConfiguration = adapter.runSync;
+adapter.runSync = (query, ...params) => {
+  const result = runBeforeConfiguration(query, ...params);
+  if (query.startsWith('UPDATE tournaments SET name=')) throw Error('Simulated settings failure');
+  return result;
+};
+assert.throws(
+  () => store.updateTournament(configurationId, 'Rolled back', '8ball', 'knockout', 9),
+  /Simulated settings failure/,
+);
+adapter.runSync = runBeforeConfiguration;
+assert.deepEqual(store.tournament(configurationId), updatedConfiguration);
+
+// Preserve a legacy setup event that already contains match records.
+sql
+  .prepare('INSERT INTO matches(tournament_id,round,slot) VALUES(?,?,?)')
+  .run(configurationId, 1, 0);
+assert.throws(
+  () => store.updateTournament(configurationId, 'Do not overwrite draw', '8ball', 'knockout', 5),
+  /draw already exists/,
+);
+assert.deepEqual(store.tournament(configurationId), updatedConfiguration);
+assert.equal(store.matches(configurationId).length, 1);
+sql.prepare('DELETE FROM matches WHERE tournament_id=?').run(configurationId);
+store.startTournament(
+  configurationId,
+  configurationPlayers.map((player) => player.id),
+);
+const configuredSchedule = store.matches(configurationId);
+assert.equal(configuredSchedule.length, 3);
+const activeConfiguration = store.tournament(configurationId);
+assert.throws(
+  () => store.updateTournament(configurationId, 'Active edit', '8ball', 'knockout', 3),
+  /locked after starting/,
+);
+assert.deepEqual(store.tournament(configurationId), activeConfiguration);
+assert.deepEqual(store.matches(configurationId), configuredSchedule);
+assert.throws(() => store.saveResult(configurationId, configuredSchedule[0].id, 2, 0));
+assert.deepEqual(store.matches(configurationId), configuredSchedule);
+for (const match of configuredSchedule) store.saveResult(configurationId, match.id, 4, 1);
+const completedConfiguration = store.tournament(configurationId);
+const completedMatches = store.matches(configurationId);
+assert.equal(completedConfiguration.status, 'complete');
+assert.throws(
+  () => store.updateTournament(configurationId, 'Completed edit', '8ball', 'knockout', 3),
+  /locked after starting/,
+);
+assert.deepEqual(store.tournament(configurationId), completedConfiguration);
+assert.deepEqual(store.matches(configurationId), completedMatches);
+store.deleteTournament(configurationId);
+
+const knockoutConfigurationId = store.createTournament(
+  'Change to knockout',
+  'snooker',
+  'round_robin',
+  5,
+);
+store.updateTournament(knockoutConfigurationId, 'Knockout settings', '8ball', 'knockout', 1);
+for (const name of ['K1', 'K2', 'K3']) store.addPlayer(knockoutConfigurationId, name);
+store.startTournament(
+  knockoutConfigurationId,
+  store.participants(knockoutConfigurationId).map((player) => player.id),
+);
+assert.equal(store.matches(knockoutConfigurationId).length, 3);
+assert.equal(
+  store.matches(knockoutConfigurationId).filter((match) => match.status === 'bye').length,
+  1,
+);
+while (true) {
+  const match = store
+    .matches(knockoutConfigurationId)
+    .find(
+      (candidate) =>
+        candidate.status === 'pending' && candidate.p1 !== null && candidate.p2 !== null,
+    );
+  if (!match) break;
+  store.saveResult(knockoutConfigurationId, match.id, 1, 0);
+}
+assert.equal(store.tournament(knockoutConfigurationId).status, 'complete');
+store.deleteTournament(knockoutConfigurationId);
+
 const orderingId = store.createTournament('Ordering', 'snooker', 'knockout', 3);
 for (const name of ['A', 'B', 'C']) store.addPlayer(orderingId, name);
 store.removePlayer(orderingId, store.participants(orderingId)[1].id);
@@ -309,5 +429,5 @@ for (const best of [3, 5, 7, 9]) {
 }
 sql.close();
 console.log(
-  'Passed manual assignment and persistence checks, player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.',
+  'Passed tournament configuration and lock checks, manual assignment and persistence checks, player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.',
 );
