@@ -1,5 +1,28 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+// Only widen the allowed format; retain every existing validation and stored row.
+export function migrateDynamicKnockout(db: SQLiteDatabase) {
+  db.withTransactionSync(() => {
+    for (const operation of ['insert', 'update']) {
+      const name = `validate_tournaments_${operation}`;
+      const existing = db.getFirstSync<{ sql: string }>(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?",
+        name,
+      );
+      const old = "NEW.format NOT IN ('knockout','round_robin')";
+      if (!existing?.sql.includes(old)) throw Error('Unrecognized tournament validation trigger');
+      db.execSync(`DROP TRIGGER ${name}`);
+      db.execSync(
+        existing.sql.replace(
+          old,
+          "NEW.format NOT IN ('knockout','dynamic_knockout','round_robin')",
+        ),
+      );
+    }
+    db.execSync('PRAGMA user_version=3');
+  });
+}
+
 // Version 2 is additive: legacy settings, IDs, players, scores and draws are retained.
 export function migrateScoring(db: SQLiteDatabase) {
   db.withTransactionSync(() => {

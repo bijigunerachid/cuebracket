@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import type { TournamentData } from '../components/TournamentRoute';
 import MatchCard from '../components/MatchCard';
 import KnockoutBracket from '../components/KnockoutBracket';
-import type { Match } from '../engine';
+import { formatLabel, type Match } from '../engine';
 import { baseScoringRule, scoringLabel } from '../rules';
 import { Btn, C, Card, Choice, Page, styles } from '../ui';
 
@@ -34,7 +34,7 @@ export default function TournamentDetailScreen({
   return (
     <Page
       title={tournament.name}
-      subtitle={`${tournament.game === '8ball' ? '8-Ball Pool' : 'Snooker'} · ${tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} · ${scoringLabel(baseScoringRule(tournament), tournament.first_to_label)}`}
+      subtitle={`${tournament.game === '8ball' ? '8-Ball Pool' : 'Snooker'} · ${formatLabel(tournament.format)} · ${scoringLabel(baseScoringRule(tournament), tournament.first_to_label)}`}
       onBack={onHome}
     >
       <View style={[styles.row, { flexWrap: 'wrap' }]}>
@@ -81,6 +81,15 @@ export default function TournamentDetailScreen({
               ))}
             </>
           ) : null}
+          {tournament.format === 'dynamic_knockout' ? (
+            <Card>
+              <Text style={styles.muted}>
+                Dynamic Knockout: qualifiers are reshuffled only after every match in the current
+                round is confirmed. Each odd-player round has one automatic BYE. Future rounds
+                appear when drawn.
+              </Text>
+            </Card>
+          ) : null}
           <Text style={styles.label}>MATCHES / ROUNDS</Text>
           {tournament.format === 'knockout' ? (
             <Choice
@@ -102,6 +111,25 @@ export default function TournamentDetailScreen({
             [...new Set(matches.map((match) => match.round))].map((round) => (
               <View key={round}>
                 <Text style={[styles.label, { color: C.green }]}>ROUND {round}</Text>
+                {tournament.format === 'dynamic_knockout' ? (
+                  <Text style={[styles.muted, { marginBottom: 10 }]}>
+                    {
+                      matches.filter((match) => match.round === round && match.status !== 'bye')
+                        .length
+                    }{' '}
+                    matches ·{' '}
+                    {
+                      matches.filter((match) => match.round === round && match.status === 'bye')
+                        .length
+                    }{' '}
+                    BYEs ·{' '}
+                    {
+                      matches.filter((match) => match.round === round && match.status === 'pending')
+                        .length
+                    }{' '}
+                    awaiting results
+                  </Text>
+                ) : null}
                 {matches
                   .filter((match) => match.round === round)
                   .map((match) => (

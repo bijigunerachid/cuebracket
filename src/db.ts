@@ -10,8 +10,10 @@ import {
   shuffle,
   validateSettings,
   ScoringOptions,
+  dynamicPairs,
+  MAX_DYNAMIC_PLAYERS,
 } from './engine';
-import { migrateScoring } from './migrations';
+import { migrateScoring, migrateDynamicKnockout } from './migrations';
 import {
   scoringOptions,
   validateScoringOptions,
@@ -72,6 +74,8 @@ export function addPlayer(id: number, name: string) {
   const t = tournament(id);
   if (!t || t.status !== 'setup') throw Error('Tournament already started');
   const existing = participants(id);
+  if (t.format === 'dynamic_knockout' && existing.length >= MAX_DYNAMIC_PLAYERS)
+    throw Error(`Dynamic Knockout supports at most ${MAX_DYNAMIC_PLAYERS} players`);
   if (existing.some((p) => p.name.toLowerCase() === trimmed.toLowerCase()))
     throw Error('Player already registered');
   db.withTransactionSync(() => {
@@ -98,6 +102,8 @@ export function updateTournament(
     const current = tournament(id);
     if (!current) throw Error('Tournament not found');
     if (current.status !== 'setup') throw Error('Tournament settings are locked after starting');
+    if (format === 'dynamic_knockout' && participants(id).length > MAX_DYNAMIC_PLAYERS)
+      throw Error(`Dynamic Knockout supports at most ${MAX_DYNAMIC_PLAYERS} players`);
     const options = scoring ?? scoringOptions(current);
     validateScoringOptions(options);
     const existingDraw = db.getFirstSync<{ n: number }>(
@@ -173,6 +179,15 @@ export function startTournament(id: number, orderedIds: number[]) {
     orderedIds.some((p) => !registered.includes(p))
   )
     throw Error('Draw must contain each player exactly once');
+  if (t.format === 'dynamic_knockout') {
+    dynamicPairs(orderedIds); // Validate the practical limit before any writes.
+    db.withTransactionSync(() => {
+      if (matches(id).length) throw Error('A draw already exists');
+      insertDynamicRound(t, orderedIds, 1);
+      db.runSync("UPDATE tournaments SET status='active' WHERE id=?", id);
+    });
+    return;
+  }
   const pairs = t.format === 'knockout' ? knockoutPairs(orderedIds) : roundRobinPairs(orderedIds);
   const totalRounds = Math.log2(2 ** Math.ceil(Math.log2(registered.length)));
   const rule = (round: number) => ruleForRound(t, round, totalRounds, registered.length);
@@ -236,6 +251,21 @@ function advance(tid: number, matchId: number, winner: number, bye = false) {
     matchId,
   );
   const t = tournament(tid)!;
+  if (t.format === 'dynamic_knockout') {
+    const current = matches(tid).filter((match) => match.round === m.round);
+    if (current.some((match) => match.status === 'pending')) return;
+    const qualified = current.map((match) => match.winner!);
+    if (qualified.some((id) => id == null) || new Set(qualified).size !== qualified.length)
+      throw Error('Invalid round qualifiers');
+    if (qualified.length === 1) {
+      db.runSync("UPDATE tournaments SET status='complete' WHERE id=?", tid);
+    } else {
+      if (matches(tid).some((match) => match.round > m.round))
+        throw Error('Next round already exists');
+      insertDynamicRound(t, shuffle(qualified), m.round + 1);
+    }
+    return;
+  }
   if (t.format !== 'knockout') return;
   const next = db.getFirstSync<Match>(
     'SELECT * FROM matches WHERE tournament_id=? AND round=? AND slot=?',
@@ -249,6 +279,27 @@ function advance(tid: number, matchId: number, winner: number, bye = false) {
   }
   const column = m.slot % 2 === 0 ? 'p1' : 'p2';
   db.runSync(`UPDATE matches SET ${column}=? WHERE id=?`, winner, next.id);
+}
+
+function insertDynamicRound(t: Tournament, order: number[], round: number) {
+  const playerCount = participants(t.id).length;
+  const scoring = ruleForRound(t, round, Math.ceil(Math.log2(playerCount)), playerCount);
+  for (const pair of dynamicPairs(order, round)) {
+    const bye = pair.p2 === null;
+    db.runSync(
+      'INSERT INTO matches(tournament_id,round,slot,p1,p2,winner,status,target,scoring_mode,scoring_value) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      t.id,
+      round,
+      pair.slot,
+      pair.p1,
+      pair.p2,
+      bye ? pair.p1 : null,
+      bye ? 'bye' : 'pending',
+      scoringTarget(scoring),
+      scoring.mode,
+      scoring.value,
+    );
+  }
 }
 export function saveResult(tid: number, mid: number, s1: number, s2: number) {
   const t = tournament(tid);
@@ -303,8 +354,8 @@ function cleanupPlayers() {
 // Triggers add write constraints without rebuilding tables or discarding legacy results.
 function migrate() {
   const version = db.getFirstSync<{ user_version: number }>('PRAGMA user_version')!.user_version;
-  if (version > 2) throw Error('This database was created by a newer version of CueBracket');
-  if (version === 2) return;
+  if (version > 3) throw Error('This database was created by a newer version of CueBracket');
+  if (version === 3) return;
   if (version === 0)
     db.withTransactionSync(() => {
       for (const t of tournaments()) {
@@ -362,5 +413,6 @@ function migrate() {
           );
       db.execSync('PRAGMA user_version=1');
     });
-  migrateScoring(db);
+  if (version < 2) migrateScoring(db);
+  migrateDynamicKnockout(db);
 }
