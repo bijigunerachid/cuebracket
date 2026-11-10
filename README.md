@@ -25,6 +25,20 @@ Normal tournament operation uses local storage and does not require an account o
 
 ## Draw and scoring rules
 
+### Dynamic Knockout
+
+Choose **Dynamic Knockout** for a new event with 2–128 players. This limit is checked when registering players, switching format, and starting a draw. The algorithm is generic for every integer count in that range.
+
+Each round has `floor(N / 2)` played matches, `N % 2` BYEs, and `ceil(N / 2)` qualifiers. The initial preview shuffles everyone; Manual mode can swap opening opponents and the single BYE recipient. Confirming saves exactly the preview. After all matches in a round are confirmed, winners plus the BYE recipient are shuffled and the next round is saved automatically. Later draws are automatic. BYEs receive no score; a player may randomly receive a BYE in more than one round.
+
+For example, 5 players progress through 5 → 3 → 2 → 1; 7 through 7 → 4 → 2 → 1; 10 through 10 → 5 → 3 → 2 → 1; and 12 through 12 → 6 → 3 → 2 → 1. Even-player rounds never have a BYE. Only generated rounds appear in the round list, with played-match, BYE, and pending-result counts. There are no fixed connections between rounds because qualifiers are reshuffled.
+
+First-to, local A labels, and Best-of scoring remain available. Optional stage overrides use rounds remaining: final, semifinals, quarterfinals, then preliminary for earlier rounds. A new round snapshots its scoring rule when generated. The last score and the next draw are written in one SQLite transaction; failure rolls both back. Confirmed scores cannot be submitted again. Restarting reloads persisted rounds without reshuffling them.
+
+Schema version 3 widens the allowed tournament formats transactionally without changing existing tournament rows, matches, or scoring rules. Standard knockout and round robin keep their existing behavior. Automated tests simulate every Dynamic Knockout size from 2 through 128, including complete tournaments, module reloads, duplicate submissions, and rollback. A separate test closes and reopens a file-backed SQLite connection after each result. Android process restart and upgrade testing remain necessary.
+
+On Android, create 5-, 7-, 10-, and 12-player dynamic events, review random/manual opening draws, and confirm no next round appears before the last result. Close the app mid-round and after advancement, reopen, and finish the event. Check score targets, automatic BYEs, final champion, large text, and offline operation. Also reopen existing standard knockout and round-robin events after upgrading.
+
 The knockout bracket expands to the next power of two. BYEs equal bracket size minus registered players; each BYE occupies a separate opening-round match. A shuffled player order randomly selects BYE recipients and pairs everyone else. Every registered player appears once. Manual mode swaps assignments to choose opponents or BYE recipients without duplicates. The confirmed order is saved exactly as previewed, without another shuffle.
 
 For example, 5 players produce 3 BYEs and 1 match to play, leaving 4 players. With 10 players, 6 BYEs and 2 matches leave 8 players. Power-of-two counts need no BYEs. There is no special 10-player format or fixed player-count limit in the draw algorithm; device memory and rendering still limit very large events. Automated checks cover 2-128 players.

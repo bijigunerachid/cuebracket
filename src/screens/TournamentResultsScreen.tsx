@@ -19,7 +19,7 @@ export default function TournamentResultsScreen({
   const leaders = tiedLeaders(standings);
   const unresolved = tournament.format === 'round_robin' && leaders.length > 1;
   const champion =
-    tournament.format === 'knockout'
+    tournament.format !== 'round_robin'
       ? (players.find((player) => player.id === final?.winner)?.name ?? 'TBD')
       : leaders.map((row) => row.player.name).join(' / ') || 'TBD';
   return (

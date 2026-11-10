@@ -86,8 +86,19 @@ export function ruleForRound(
   playerCount: number,
 ): ScoringRule {
   const options = scoringOptions(tournament);
-  return tournament.format === 'knockout'
-    ? (options.rounds[roundStage(round, totalRounds, playerCount)] ?? baseScoringRule(tournament))
+  const remaining = totalRounds - round;
+  const stage =
+    tournament.format === 'dynamic_knockout'
+      ? remaining === 0
+        ? 'final'
+        : remaining === 1
+          ? 'semifinal'
+          : remaining === 2
+            ? 'quarterfinal'
+            : 'preliminary'
+      : roundStage(round, totalRounds, playerCount);
+  return tournament.format !== 'round_robin'
+    ? (options.rounds[stage] ?? baseScoringRule(tournament))
     : baseScoringRule(tournament);
 }
 export function ruleForMatch(tournament: Tournament, match: Match): ScoringRule {

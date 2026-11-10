@@ -1,4 +1,35 @@
-export type Format = 'knockout' | 'round_robin';
+export type Format = 'knockout' | 'dynamic_knockout' | 'round_robin';
+export const MAX_DYNAMIC_PLAYERS = 128;
+export const formatLabel = (format: Format) =>
+  format === 'dynamic_knockout'
+    ? 'Dynamic Knockout'
+    : format === 'knockout'
+      ? 'Knockout'
+      : 'Round robin';
+
+export function dynamicSummary(count: number) {
+  if (!Number.isInteger(count) || count < 2 || count > MAX_DYNAMIC_PLAYERS)
+    throw Error(`Dynamic Knockout supports 2–${MAX_DYNAMIC_PLAYERS} players`);
+  return {
+    players: count,
+    matches: Math.floor(count / 2),
+    byes: count % 2,
+    advancing: Math.ceil(count / 2),
+    rounds: Math.ceil(Math.log2(count)),
+  };
+}
+
+// Input order is the confirmed preview or a freshly shuffled set of qualifiers.
+export function dynamicPairs(ids: number[], round = 1) {
+  dynamicSummary(ids.length);
+  if (!Number.isSafeInteger(round) || round < 1) throw Error('Invalid round number');
+  if (new Set(ids).size !== ids.length || ids.some((id) => !Number.isSafeInteger(id) || id < 1))
+    throw Error('Draw must contain each player exactly once');
+  const pairs: { round: number; slot: number; p1: number; p2: number | null }[] = [];
+  for (let index = 0; index < ids.length; index += 2)
+    pairs.push({ round, slot: pairs.length, p1: ids[index], p2: ids[index + 1] ?? null });
+  return pairs;
+}
 export type Game = '8ball' | 'snooker';
 export type ScoringMode = 'best_of' | 'first_to';
 export type ScoringRule = { mode: ScoringMode; value: number };
@@ -46,7 +77,7 @@ export type Tournament = {
 export const winsNeeded = (bestOf: number) => Math.floor(bestOf / 2) + 1;
 export function validateSettings(game: Game, format: Format, bestOf: number) {
   if (game !== '8ball' && game !== 'snooker') throw Error('Unsupported game');
-  if (format !== 'knockout' && format !== 'round_robin')
+  if (format !== 'knockout' && format !== 'dynamic_knockout' && format !== 'round_robin')
     throw Error('Unsupported tournament format');
   if (!Number.isSafeInteger(bestOf) || bestOf < 1 || bestOf % 2 === 0)
     throw Error('Best of must be a positive odd integer');

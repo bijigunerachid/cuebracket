@@ -2,12 +2,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
 const { DatabaseSync } = require('node:sqlite');
+const compiledModules = new Map();
 
 function load(file, requireModule = require) {
   const module = { exports: {} };
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-  }).outputText;
+  const code =
+    compiledModules.get(file) ??
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText;
+  compiledModules.set(file, code);
   new Function('exports', 'require', 'module', code)(module.exports, requireModule, module);
   return module.exports;
 }
@@ -15,7 +19,7 @@ const engine = load('src/engine.ts');
 const rules = load('src/rules.ts', (name) => (name === './engine' ? engine : require(name)));
 const migrations = load('src/migrations.ts');
 const bracket = load('src/bracket.ts');
-const sql = new DatabaseSync(':memory:');
+let sql = new DatabaseSync(':memory:');
 const adapter = {
   execSync: (query) => sql.exec(query),
   runSync(query, ...params) {
@@ -88,6 +92,19 @@ assert.ok(
     .all()
     .some((column) => column.name === 'target'),
 );
+adapter.execSync = (query) => {
+  originalExec(query);
+  if (
+    query.includes('CREATE TRIGGER') &&
+    query.includes('validate_tournaments_update') &&
+    query.includes('dynamic_knockout')
+  )
+    throw Error('Simulated dynamic migration failure');
+};
+assert.throws(() => store.init(), /Simulated dynamic migration failure/);
+adapter.execSync = originalExec;
+assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 2);
+assert.equal(store.matches(1)[0].winner, 1);
 store.init();
 assert.equal(store.matches(1)[0].target, 3);
 assert.equal(store.matches(1)[0].scoring_mode, 'best_of');
@@ -102,7 +119,7 @@ assert.deepEqual(
 assert.equal(store.matches(1)[0].winner, 1);
 store.init();
 assert.equal(store.matches(1)[0].s1, 3);
-assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 2);
+assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 3);
 assert.throws(() => sql.prepare('UPDATE matches SET winner=999 WHERE tournament_id=1').run());
 assert.equal(store.matches(1)[0].winner, 1);
 store.deleteTournament(1);
@@ -608,7 +625,148 @@ assert.throws(() =>
     "INSERT INTO tournaments(name,game,format,best_of,round_rules) VALUES('Bad','8ball','knockout',5,'[]')",
   ),
 );
+// Dynamic rounds persist independently of the JavaScript module lifetime.
+function reopenStore() {
+  const reopened = load('src/db.ts', (name) =>
+    name === 'expo-sqlite'
+      ? { openDatabaseSync: () => adapter }
+      : name === './engine'
+        ? engine
+        : name === './rules'
+          ? rules
+          : name === './migrations'
+            ? migrations
+            : require(name),
+  );
+  reopened.init();
+  return reopened;
+}
+for (const count of [0, 1, 129, 1.5, NaN, Infinity])
+  assert.throws(() => engine.dynamicSummary(count));
+assert.throws(() => engine.dynamicPairs([1, 1]));
+assert.throws(() => engine.dynamicPairs([1, -2]));
+for (let count = 2; count <= 128; count++) {
+  let session = reopenStore();
+  const tid = session.createTournament(
+    `Dynamic ${count}`,
+    count % 2 ? 'snooker' : '8ball',
+    'dynamic_knockout',
+    5,
+    {
+      mode: count % 2 ? 'first_to' : 'best_of',
+      label: 'A',
+      rounds: { final: { mode: 'first_to', value: 5 } },
+    },
+  );
+  for (let index = 0; index < count; index++) session.addPlayer(tid, `D${index}`);
+  if (count === 128) assert.throws(() => session.addPlayer(tid, 'Overflow'), /128/);
+  const registered = session.participants(tid).map((player) => player.id);
+  const order = engine.assignDrawPlayer(engine.shuffle(registered), 0, registered[0]);
+  session.startTournament(tid, order);
+  assert.throws(() => session.startTournament(tid, order));
+  assert.deepEqual(
+    session.matches(tid).map((m) => [m.p1, m.p2]),
+    engine.dynamicPairs(order).map((m) => [m.p1, m.p2]),
+  );
+  let active = [...registered],
+    round = 1,
+    played = 0;
+  while (active.length > 1) {
+    let current = session.matches(tid).filter((m) => m.round === round);
+    assert.equal(
+      session.matches(tid).some((m) => m.round > round),
+      false,
+    );
+    const ids = current.flatMap((m) => [m.p1, m.p2]).filter((id) => id !== null);
+    assert.equal(new Set(ids).size, active.length);
+    assert.deepEqual(
+      [...ids].sort((a, b) => a - b),
+      [...active].sort((a, b) => a - b),
+    );
+    assert.equal(current.filter((m) => m.status === 'bye').length, active.length % 2);
+    const pending = current.filter((m) => m.status === 'pending');
+    assert.equal(pending.length, Math.floor(active.length / 2));
+    for (const m of current.filter((m) => m.status === 'bye')) {
+      assert.equal(m.s1, null);
+      assert.equal(m.s2, null);
+      assert.equal(m.winner, m.p1);
+      assert.throws(() => session.saveResult(tid, m.id, m.target, 0));
+    }
+    for (let index = 0; index < pending.length; index++) {
+      const match = pending[index];
+      assert.throws(() => session.saveResult(tid, match.id, match.target + 1, 0));
+      assert.throws(() => session.saveResult(tid, match.id, match.target, match.target));
+      const before = session.matches(tid);
+      // A failure creating the next draw must also roll back the last result.
+      if (count === 5 && index === pending.length - 1 && active.length > 2) {
+        const originalRun = adapter.runSync;
+        adapter.runSync = (query, ...params) => {
+          if (query.startsWith('INSERT INTO matches')) throw Error('Injected next-round failure');
+          return originalRun(query, ...params);
+        };
+        assert.throws(() => session.saveResult(tid, match.id, match.target, 0), /Injected/);
+        adapter.runSync = originalRun;
+        assert.deepEqual(session.matches(tid), before);
+      }
+      session.saveResult(tid, match.id, index % 2 ? 0 : match.target, index % 2 ? match.target : 0);
+      played++;
+      assert.throws(() => session.saveResult(tid, match.id, match.target, 0));
+      const saved = session.matches(tid);
+      session = reopenStore();
+      assert.deepEqual(session.matches(tid), saved);
+      if (index < pending.length - 1)
+        assert.equal(
+          saved.some((m) => m.round > round),
+          false,
+        );
+    }
+    current = session.matches(tid).filter((m) => m.round === round);
+    active = current.map((m) => m.winner);
+    assert.equal(active.length, Math.ceil(ids.length / 2));
+    assert.ok(active.every((id) => ids.includes(id)));
+    round++;
+  }
+  assert.equal(played, count - 1);
+  assert.equal(session.tournament(tid).status, 'complete');
+  const final = session.matches(tid).filter((m) => m.round === round - 1);
+  assert.equal(final.length, 1);
+  assert.equal(final[0].target, 5);
+  assert.equal(final[0].winner, active[0]);
+  assert.ok(registered.includes(active[0]));
+  session.deleteTournament(tid);
+}
+console.log(
+  'Passed complete Dynamic Knockout simulations for every count 2-128, limits, per-round membership/BYEs, manual opening assignments, score validation, restart reloads, transaction rollback, duplicate-result protection, and champions.',
+);
 sql.close();
+// Close and reopen a real file-backed connection, including a partially scored round.
+const diskPath = require('node:path').join(
+  require('node:os').tmpdir(),
+  `cuebracket-dynamic-${require('node:crypto').randomUUID()}.db`,
+);
+try {
+  sql = new DatabaseSync(diskPath);
+  let disk = reopenStore();
+  const id = disk.createTournament('Disk restart', '8ball', 'dynamic_knockout', 3);
+  for (let index = 0; index < 5; index++) disk.addPlayer(id, `Disk ${index}`);
+  disk.startTournament(id, engine.shuffle(disk.participants(id).map((p) => p.id)));
+  while (disk.tournament(id).status === 'active') {
+    const match = disk.matches(id).find((m) => m.status === 'pending');
+    assert.ok(match);
+    disk.saveResult(id, match.id, match.target, 0);
+    const snapshot = disk.matches(id);
+    sql.close();
+    sql = new DatabaseSync(diskPath);
+    disk = reopenStore();
+    assert.deepEqual(disk.matches(id), snapshot);
+  }
+  assert.equal(disk.matches(id).filter((m) => m.status === 'done').length, 4);
+  assert.equal(disk.tournament(id).status, 'complete');
+} finally {
+  sql.close();
+  fs.unlinkSync(diskPath);
+}
+console.log('Passed real file-backed SQLite close/reopen after each Dynamic Knockout result.');
 console.log(
   'Passed scoring migration rollback/retry, legacy preservation, 127 round-specific knockout simulations (2–128 players), First-to round robin, 186 existing tournament simulations, configuration locks, manual assignments, and score validation.',
 );

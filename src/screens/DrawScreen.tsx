@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Text } from 'react-native';
 import {
   Format,
+  dynamicPairs,
+  dynamicSummary,
+  formatLabel,
   Tournament,
   Player,
   assignDrawPlayer,
@@ -52,10 +55,17 @@ export default function DrawScreen({
   const pairs = ready
     ? format === 'knockout'
       ? knockoutPairs(order)
-      : roundRobinPairs(order)
+      : format === 'dynamic_knockout'
+        ? dynamicPairs(order)
+        : roundRobinPairs(order)
     : [];
   const firstRound = pairs.filter((match) => match.round === 1);
-  const summary = ready && format === 'knockout' ? knockoutSummary(order.length) : null;
+  const summary =
+    ready && format !== 'round_robin'
+      ? format === 'dynamic_knockout'
+        ? dynamicSummary(order.length)
+        : knockoutSummary(order.length)
+      : null;
   const byeRecipients = firstRound
     .filter((match) => match.p1 === null || match.p2 === null)
     .map((match) => match.p1 ?? match.p2!);
@@ -104,7 +114,7 @@ export default function DrawScreen({
   return (
     <Page
       title="Draw / Opponents"
-      subtitle={`${tournamentName} · ${format === 'knockout' ? 'Knockout' : 'Round robin'}`}
+      subtitle={`${tournamentName} · ${formatLabel(format)}`}
       onBack={onBack}
     >
       <Choice
@@ -125,7 +135,7 @@ export default function DrawScreen({
       <Card>
         <Text style={styles.muted}>
           {mode === 'manual'
-            ? format === 'knockout'
+            ? format !== 'round_robin'
               ? 'Choose the players in each first-round match or BYE slot. Assignments swap, so each player appears exactly once.'
               : 'Choose first-round opponents or the resting player. All players will still meet once over the full schedule.'
             : 'Review the random draw below, or shuffle again before starting.'}
@@ -166,7 +176,17 @@ export default function DrawScreen({
           </Text>
         </Card>
       ) : null}
-      {summary && tournament ? (
+      {format === 'dynamic_knockout' ? (
+        <Card>
+          <Text style={styles.muted}>
+            Only this round is drawn now. After every match is confirmed, qualifiers are shuffled
+            for the next round. Odd-player rounds have exactly one randomly assigned BYE;
+            even-player rounds have none. Manual assignments apply to this opening round only.
+            Maximum 128 players.
+          </Text>
+        </Card>
+      ) : null}
+      {summary && tournament && format !== 'dynamic_knockout' ? (
         <Card>
           <Text style={styles.label}>SCORING BY ROUND</Text>
           {Array.from({ length: summary.rounds }, (_, index) => index + 1).map((round) => (
@@ -203,7 +223,7 @@ export default function DrawScreen({
         </Card>
       ))}
       <Text style={styles.muted}>
-        {format === 'knockout'
+        {format !== 'round_robin'
           ? summary?.byes
             ? 'BYE recipients advance automatically without entering a score. Choose recipients in Manual mode, or reshuffle in Random mode.'
             : 'No BYEs are needed. Each opening-round winner advances.'

@@ -45,7 +45,7 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
         ...options,
         mode: rule.mode,
         label: options.label.trim(),
-        rounds: format === 'knockout' ? options.rounds : {},
+        rounds: format !== 'round_robin' ? options.rounds : {},
       };
       validateSettings(game, format, bestOf);
       validateScoringOptions(scoring);
@@ -82,6 +82,7 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
         onChange={setFormat}
         options={[
           { label: 'Knockout', value: 'knockout' },
+          { label: 'Dynamic Knockout', value: 'dynamic_knockout' },
           { label: 'Round robin', value: 'round_robin' },
         ]}
       />
@@ -96,11 +97,13 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
         A3 can be used here for first to 3. This is configurable local terminology, not an official
         universal Pool or Snooker rule.
       </Text>
-      {format === 'knockout' ? (
+      {format !== 'round_robin' ? (
         <>
           <Text style={styles.label}>Optional round-specific scoring</Text>
           <Text style={styles.muted}>
-            The opening round with BYEs uses Preliminary. Later rounds use their bracket stage.
+            {format === 'dynamic_knockout'
+              ? 'Dynamic rounds use the number of rounds remaining: final, semifinals, quarterfinals, then preliminary. Pairings are reshuffled after each completed round. Supports 2-128 players.'
+              : 'The opening round with BYEs uses Preliminary. Later rounds use their bracket stage.'}{' '}
             Unconfigured stages inherit the default. Some stages may not exist for your player
             count.
           </Text>
