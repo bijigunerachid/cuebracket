@@ -14,6 +14,15 @@ export function tiedLeaders<T extends {wins:number,diff:number}>(rankings:T[]):T
  return first?rankings.filter(r=>r.wins===first.wins&&r.diff===first.diff):[];
 }
 export function shuffle<T>(items:T[]):T[]{const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+export function assignDrawPlayer(order:number[],position:number,playerId:number):number[]{
+ if(!Number.isInteger(position)||position<0||position>=order.length)throw Error('Invalid draw position');
+ if(new Set(order).size!==order.length)throw Error('Draw contains duplicate players');
+ const previousPosition=order.indexOf(playerId);
+ if(previousPosition===-1)throw Error('Player is not in this draw');
+ const next=[...order];
+ [next[position],next[previousPosition]]=[next[previousPosition],next[position]];
+ return next;
+}
 export function knockoutPairs(ids:number[]):{round:number,slot:number,p1:number|null,p2:number|null}[]{
  if(ids.length<2)throw Error('Add at least 2 players');
  const size=2**Math.ceil(Math.log2(ids.length));

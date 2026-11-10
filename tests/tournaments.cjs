@@ -140,8 +140,50 @@ assert.equal(store.tournament(tieId).status,'complete');
 assert.equal(engine.tiedLeaders(store.standings(tieId)).length,3);
 store.deleteTournament(tieId);
 
+assert.deepEqual(engine.assignDrawPlayer([1,2,3,4],1,4),[1,4,3,2]);
+assert.deepEqual(engine.assignDrawPlayer([1,2,3,4],1,2),[1,2,3,4]);
+assert.throws(()=>engine.assignDrawPlayer([1,2],-1,1));
+assert.throws(()=>engine.assignDrawPlayer([1,2],2,1));
+assert.throws(()=>engine.assignDrawPlayer([1,2],0.5,1));
+assert.throws(()=>engine.assignDrawPlayer([1,2],0,999));
+assert.throws(()=>engine.assignDrawPlayer([1,1],0,1));
+
+// Verify explicit opponent and BYE choices survive SQLite draw creation.
+for(const format of ['knockout','round_robin'])for(const count of [2,3,5,6,7,8,9]){
+ const tid=store.createTournament('Manual draw','8ball',format,3);
+ for(let i=0;i<count;i++)store.addPlayer(tid,`Manual ${i}`);
+ const initial=store.participants(tid).map(p=>p.id);
+ assert.throws(()=>store.startTournament(tid,[initial[0],...initial.slice(0,-1)]));
+ assert.equal(store.matches(tid).length,0);
+ const order=engine.assignDrawPlayer(initial,0,initial[count-1]);
+ const expected=format==='knockout'?engine.knockoutPairs(order):engine.roundRobinPairs(order);
+ store.startTournament(tid,order);
+ const actual=store.matches(tid).filter(m=>format==='round_robin'||m.round===1);
+ assert.deepEqual(actual.map(m=>[m.round,m.slot,m.p1,m.p2]),expected.map(m=>[m.round,m.slot,m.p1,m.p2]));
+ if(format==='knockout'&&count!==2**Math.ceil(Math.log2(count))){
+  assert.equal(actual[0].p1,initial[count-1]);
+  assert.equal(actual[0].status,'bye');
+  assert.equal(actual[0].winner,initial[count-1]);
+ }
+ const confirmed=store.matches(tid);
+ assert.throws(()=>store.startTournament(tid,initial));
+ assert.deepEqual(store.matches(tid),confirmed);
+ store.deleteTournament(tid);
+}
+
 for (let count = 2; count <= 128; count++) {
   const ids = Array.from({ length: count }, (_, i) => i + 1);
+  let manual=[...ids];
+  for(let position=0;position<count;position++){
+   const previous=manual;
+   const before=[...previous];
+   manual=engine.assignDrawPlayer(manual,position,ids[count-position-1]);
+   assert.deepEqual(previous,before);
+   assert.deepEqual(before.slice().sort((a,b)=>a-b),ids);
+   assert.equal(manual[position],ids[count-position-1]);
+   assert.notEqual(manual,previous);
+   assert.deepEqual(manual.slice().sort((a,b)=>a-b),ids);
+  }
   const pairs = engine.knockoutPairs(ids);
   assert.equal(pairs.length, 2 ** Math.ceil(Math.log2(count)) / 2);
   assert.ok(pairs.every(m => m.p1 !== null || m.p2 !== null));
@@ -191,4 +233,4 @@ for (const best of [3,5,7,9]) {
   }
 }
 sql.close();
-console.log('Passed player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.');
+console.log('Passed manual assignment and persistence checks, player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.');
