@@ -88,7 +88,7 @@ export default function TournamentDetailScreen({
       ) : null}
       {tournament.status === 'setup' ? (
         <>
-          <SectionHeading title="Build your competition" />
+          <SectionHeading title="Tournament setup" />
           <Card>
             <Text style={styles.heading}>
               Next up: {players.length < 2 ? 'the players' : 'the draw'}
@@ -108,14 +108,12 @@ export default function TournamentDetailScreen({
             <Card highlight>
               <StatusBadge
                 label={
-                  tournament.status === 'complete'
-                    ? 'COMPETITION COMPLETE'
-                    : `ROUND ${currentRound} · IN PLAY`
+                  tournament.status === 'complete' ? 'Completed' : `ROUND ${currentRound} · IN PLAY`
                 }
               />
-              <Text style={[styles.heading, { marginTop: 16 }]}>
+              <Text style={[styles.heading, { marginTop: 8 }]}>
                 {tournament.status === 'complete'
-                  ? 'A tournament to remember.'
+                  ? 'Tournament complete'
                   : `${ready.length} ${ready.length === 1 ? 'match' : 'matches'} ready for a result`}
               </Text>
               <Progress
@@ -124,7 +122,7 @@ export default function TournamentDetailScreen({
                 label={`${played} of ${playable} drawn matches played`}
               />
               {ready[0] ? (
-                <Btn title="Enter next result  →" onPress={() => onScore(ready[0])} />
+                <Btn title="Enter next result" onPress={() => onScore(ready[0])} />
               ) : null}
               {tournament.status === 'complete' ? (
                 <Btn title="View Results" onPress={onResults} />
@@ -243,7 +241,12 @@ export default function TournamentDetailScreen({
           ) : null}
         </>
       )}
-      <Btn title="Tournament actions  ···" secondary onPress={() => setActions(true)} />
+      <Btn
+        title="Tournament actions"
+        icon="more-horizontal"
+        secondary
+        onPress={() => setActions(true)}
+      />
       <BottomSheet visible={actions} title="Tournament actions" onClose={() => setActions(false)}>
         <Btn
           title="All tournaments"

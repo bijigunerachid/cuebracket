@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import * as store from '../db';
 import type { Player, Tournament } from '../engine';
 import { tournamentPath } from '../navigation';
 import PlayerCard from '../components/PlayerCard';
-import { Btn, Card, EmptyState, Field, Page, SectionHeading, styles } from '../ui';
+import { Btn, EmptyState, Field, Page, SectionHeading, styles } from '../ui';
 
 export default function PlayerDirectoryScreen() {
   const [groups, setGroups] = useState<{ tournament: Tournament; players: Player[] }[]>([]);
@@ -37,7 +37,7 @@ export default function PlayerDirectoryScreen() {
     }))
     .filter((group) => group.players.length);
   return (
-    <Page title="The players" subtitle="Your registrations, organized by tournament.">
+    <Page title="Players" subtitle="Your registrations, organized by tournament.">
       <Field
         label="Search players"
         value={query}
@@ -53,7 +53,7 @@ export default function PlayerDirectoryScreen() {
         />
       ) : visible.length ? (
         visible.map(({ tournament, players }) => (
-          <Card key={tournament.id}>
+          <View key={tournament.id} style={{ marginBottom: 16 }}>
             <SectionHeading title={tournament.name} detail={`${players.length} shown`} />
             {players.map((player) => (
               <PlayerCard key={player.id} player={player} />
@@ -69,7 +69,7 @@ export default function PlayerDirectoryScreen() {
                 )
               }
             />
-          </Card>
+          </View>
         ))
       ) : (
         <EmptyState

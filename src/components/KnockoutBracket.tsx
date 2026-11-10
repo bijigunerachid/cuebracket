@@ -40,8 +40,7 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
   return (
     <>
       <Text style={[styles.muted, { marginVertical: 12 }]}>
-        Swipe sideways to follow the rounds. Scroll down for more matches. Tap a ready match to
-        enter its score. Full player names are also available in Round List.
+        Swipe for later rounds. Tap a ready match to enter its score.
       </Text>
       <ScrollView
         horizontal
@@ -57,10 +56,13 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                 accessibilityRole="header"
                 style={[
                   styles.label,
-                  { position: 'absolute', left: round.x, width: round.width, color: C.gold },
+                  { position: 'absolute', left: round.x, width: round.width, color: C.muted },
                 ]}
               >
-                {round.label}
+                {round.round === 1 &&
+                matches.some((match) => match.round === 1 && match.status === 'bye')
+                  ? 'Opening round'
+                  : round.label}
               </Text>
             ))}
           </View>
@@ -125,7 +127,7 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                       marginBottom: 0,
                       padding: 12,
                       justifyContent: 'space-between',
-                      borderColor: ready ? C.green : C.border,
+                      borderColor: C.border,
                     },
                   ]}
                 >
@@ -144,16 +146,32 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                           {
                             flex: 1,
                             color:
-                              player.id !== null && match.winner === player.id ? C.gold : C.white,
+                              player.id !== null &&
+                              match.winner === player.id &&
+                              match.status === 'done'
+                                ? C.green
+                                : C.white,
                             fontWeight:
-                              player.id !== null && match.winner === player.id ? '800' : '400',
+                              player.id !== null &&
+                              match.winner === player.id &&
+                              match.status === 'done'
+                                ? '700'
+                                : '400',
                           },
                         ]}
                       >
                         {name(player.id)}
                       </Text>
                       {match.status === 'done' ? (
-                        <Text style={{ color: C.green, fontWeight: '800' }}>{player.score}</Text>
+                        <Text
+                          style={{
+                            color: match.winner === player.id ? C.green : C.muted,
+                            fontWeight: '600',
+                            fontVariant: ['tabular-nums'],
+                          }}
+                        >
+                          {player.score}
+                        </Text>
                       ) : null}
                     </View>
                   ))}

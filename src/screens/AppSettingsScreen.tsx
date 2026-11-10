@@ -1,45 +1,46 @@
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { Btn, Card, Page, SectionHeading, StatusBadge, styles } from '../ui';
+import { Btn, C, Page, SectionHeading, styles } from '../ui';
 export default function AppSettingsScreen() {
   return (
-    <Page title="Made for your table." subtitle="CueBracket · Offline tournament companion">
-      <Card highlight>
-        <StatusBadge label="OFFLINE BY DESIGN" />
-        <SectionHeading title="Your device. Your data." />
-        <Text style={styles.text}>
-          Tournaments, players, and confirmed scores are stored locally. No account is needed to
-          organize a competition.
-        </Text>
-      </Card>
-      <SectionHeading title="App & preferences" />
-      <Card>
-        <Text style={styles.heading}>Dark emerald</Text>
+    <Page
+      title="Settings"
+      subtitle={`CueBracket ${Constants.expoConfig?.version ?? '1.0.0'} · Android`}
+    >
+      <SectionHeading title="Appearance" />
+      <View
+        style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border, gap: 6 }}
+      >
+        <Text style={styles.text}>Dark theme</Text>
         <Text style={styles.muted}>
-          Android system font sizing and reduced-motion preferences are respected automatically. The
-          app uses a dark theme.
+          System text sizing and reduced motion are applied automatically.
         </Text>
-      </Card>
-      <Card>
-        <Text style={styles.heading}>Tournament settings</Text>
+      </View>
+      <SectionHeading title="Tournament settings" />
+      <Text style={styles.muted}>
+        Game, format, scoring targets, and local A labels are configured per event before the draw
+        starts.
+      </Text>
+      <Btn
+        title="Open tournaments"
+        icon="arrow-right"
+        secondary
+        onPress={() => router.navigate('/tournaments')}
+      />
+      <SectionHeading title="Offline storage" />
+      <Text style={styles.text}>Stored on this device</Text>
+      <Text style={[styles.muted, { marginTop: 6 }]}>
+        Tournaments, players, and scores work without an account or internet connection.
+      </Text>
+      <View
+        style={{ paddingVertical: 16, marginTop: 8, borderTopWidth: 1, borderTopColor: C.border }}
+      >
         <Text style={styles.muted}>
-          Choose game, format, scoring, and local A labels when creating an event. Edit them before
-          confirming its draw.
-        </Text>
-        <Btn title="Open tournaments" secondary onPress={() => router.navigate('/tournaments')} />
-      </Card>
-      <SectionHeading title="Local storage" />
-      <Card>
-        <Text style={styles.text}>Keep your tournament history safe</Text>
-        <Text style={styles.muted}>
-          Uninstalling the app or clearing Android app data can remove your tournaments. Backup and
+          Clearing Android app data or uninstalling can remove tournament history. Backup and
           restore are not available yet.
         </Text>
-      </Card>
-      <Text style={styles.muted}>
-        CueBracket {Constants.expoConfig?.version ?? '1.0.0'} · Android
-      </Text>
+      </View>
     </Page>
   );
 }

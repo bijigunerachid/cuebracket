@@ -1,3 +1,4 @@
+import AppIcon from '../components/AppIcon';
 import { displayScoringLabel } from '../presentation';
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
@@ -15,6 +16,7 @@ import {
 } from '../engine';
 import {
   randomKnockoutDraw,
+  baseScoringRule,
   knockoutSummary,
   ruleForRound,
   roundStage,
@@ -60,6 +62,7 @@ export default function DrawScreen({
   const [mode, setMode] = useState<'random' | 'manual'>('random');
   const [editingPosition, setEditingPosition] = useState<number | null>(null);
   const [query, setQuery] = useState('');
+  const [showRules, setShowRules] = useState(false);
   const names = new Map(players.map((player) => [player.id, player.name]));
   const ready =
     order.length >= 2 &&
@@ -103,7 +106,7 @@ export default function DrawScreen({
         >
           <Avatar name={names.get(id) ?? ''} />
           <Text style={[styles.text, { flex: 1 }]}>{names.get(id)}</Text>
-          {mode === 'manual' ? <Text style={{ color: C.green }}>Swap ↔</Text> : null}
+          {mode === 'manual' ? <Text style={{ color: C.green }}>Swap</Text> : null}
         </TouchableOpacity>
       </React.Fragment>
     );
@@ -111,12 +114,12 @@ export default function DrawScreen({
 
   return (
     <Page
-      title="The opening draw."
+      title="Draw preview"
       subtitle={`${tournamentName} · ${formatLabel(format)}`}
       onBack={onBack}
       footer={
         <Btn
-          title="Review & start tournament  →"
+          title="Review & start tournament"
           disabled={!ready || editingPosition !== null}
           onPress={() => onStart([...order])}
         />
@@ -138,18 +141,17 @@ export default function DrawScreen({
           setEditingPosition(null);
         }}
       />
-      <Card>
-        <Text style={styles.muted}>
-          {mode === 'manual'
-            ? format !== 'round_robin'
-              ? 'Choose the players in each first-round match or BYE slot. Assignments swap, so each player appears exactly once.'
-              : 'Choose first-round opponents or the resting player. All players will still meet once over the full schedule.'
-            : 'Review the random draw below, or shuffle again before starting.'}
-        </Text>
-      </Card>
+      <Text style={[styles.muted, { marginVertical: 12 }]}>
+        {mode === 'manual'
+          ? format !== 'round_robin'
+            ? 'Tap a player to swap their match or BYE assignment.'
+            : 'Tap a player to swap first-round opponents or the resting player.'
+          : 'Review the pairings or shuffle before confirming.'}
+      </Text>
       {mode === 'random' ? (
         <Btn
           title="Shuffle Again"
+          icon="shuffle"
           secondary
           disabled={!ready}
           onPress={() => {
@@ -168,7 +170,7 @@ export default function DrawScreen({
         </Card>
       ) : null}
       {summary ? (
-        <Card highlight>
+        <Card>
           <ResponsiveRow>
             {[
               { value: summary.players, label: 'Players' },
@@ -176,14 +178,15 @@ export default function DrawScreen({
               { value: summary.byes, label: 'BYEs' },
             ].map((stat) => (
               <View key={stat.label} style={{ flex: 1 }}>
-                <Text style={[styles.heading, { fontSize: 32 }]}>{stat.value}</Text>
+                <Text style={[styles.heading, { fontSize: 24, fontVariant: ['tabular-nums'] }]}>
+                  {stat.value}
+                </Text>
                 <Text style={styles.muted}>{stat.label}</Text>
               </View>
             ))}
           </ResponsiveRow>
           <Text style={styles.muted}>
-            {summary.advancing} players remain after this round: {summary.matches} match winners
-            plus {summary.byes} automatic BYE advances.
+            {summary.advancing} advance: {summary.matches} winners + {summary.byes} BYEs.
           </Text>
           <Text style={styles.muted}>
             BYE recipients:{' '}
@@ -191,22 +194,40 @@ export default function DrawScreen({
           </Text>
         </Card>
       ) : null}
-      {format === 'dynamic_knockout' ? (
-        <Card>
+      <Btn
+        title={showRules ? 'Hide draw rules' : 'Draw rules & scoring'}
+        secondary
+        icon="info"
+        onPress={() => setShowRules(!showRules)}
+      />
+      {format === 'dynamic_knockout' && showRules ? (
+        <View style={{ marginVertical: 12 }}>
           <Text style={styles.muted}>
             Only this round is drawn now. After every match is confirmed, qualifiers are shuffled
             for the next round. Odd-player rounds have exactly one randomly assigned BYE;
             even-player rounds have none. Manual assignments apply to this opening round only.
             Maximum 128 players.
           </Text>
-        </Card>
+        </View>
       ) : null}
-      {summary && tournament && format !== 'dynamic_knockout' ? (
+      {showRules && format === 'round_robin' ? (
+        <Text style={[styles.muted, { marginVertical: 12 }]}>
+          {tournament
+            ? `${displayScoringLabel(baseScoringRule(tournament), tournament.first_to_label)}. `
+            : ''}
+          Every pair meets once. A resting player stays in the schedule and plays in later rounds.
+        </Text>
+      ) : null}
+      {summary && tournament && showRules ? (
         <Card>
           <Text style={styles.label}>SCORING BY ROUND</Text>
           {Array.from({ length: summary.rounds }, (_, index) => index + 1).map((round) => (
             <Text key={round} style={styles.muted}>
-              Round {round} ({stageNames[roundStage(round, summary.rounds, players.length)]}):{' '}
+              Round {round}
+              {format === 'knockout'
+                ? ` (${stageNames[roundStage(round, summary.rounds, players.length)]})`
+                : ''}
+              :{' '}
               {displayScoringLabel(
                 ruleForRound(tournament, round, summary.rounds, players.length),
                 tournament.first_to_label,

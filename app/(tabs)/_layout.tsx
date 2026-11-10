@@ -16,7 +16,7 @@ export default function MainTabs() {
         tabBarActiveTintColor: C.green,
         tabBarInactiveTintColor: C.muted,
         tabBarStyle: {
-          backgroundColor: '#101E18',
+          backgroundColor: C.bg,
           borderTopColor: C.border,
           height: 64 + insets.bottom + Math.max(0, fontScale - 1) * 24,
           paddingTop: 8,
