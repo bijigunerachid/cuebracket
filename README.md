@@ -12,7 +12,7 @@ Normal tournament operation uses local storage and does not require an account o
 - Automatic knockout BYEs, score recording, winner advancement, and round lists.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
-- Shared controls with accessibility metadata and page padding that respects safe areas.
+- Separate Expo Router screens, native Android back-stack navigation, visible back controls, focus-based data refresh, safe-area padding, and accessible controls with at least 48-point touch targets.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ npx.cmd expo install --check
 npx.cmd expo config --type public
 ```
 
-The automated tests run against real in-memory SQLite through an adapter for the Expo SQLite API. They do not open the Android device database. Coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
+The automated tests cover route ID validation, tournament lifecycle redirects, and stale match-link protection, plus real in-memory SQLite through an adapter for the Expo SQLite API. They do not open the Android device database or simulate a native navigation stack. Database coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
 
 To check Android JavaScript bundling and Hermes compilation:
 
@@ -66,6 +66,8 @@ npm.cmd run format:check
 
 The first command formats files; the second checks them without writing changes. Generated output, dependencies, local editor settings, and `package-lock.json` are excluded. npm manages the lockfile; do not format or edit its dependency entries manually.
 
+`.gitattributes` keeps text files in LF format on every platform, matching Prettier even when Windows Git has `core.autocrlf` enabled. Windows command scripts retain CRLF endings.
+
 ## Manual Android testing
 
 Before treating a release as ready:
@@ -77,7 +79,7 @@ Before treating a release as ready:
 5. Try invalid scores, confirm valid results, and check advancement and completion.
 6. Close and reopen the app; verify tournament data and scores remain available.
 7. Repeat core flows in an installed APK with airplane mode enabled.
-8. Check hardware Back, keyboard behavior, long player names, larger text, screen reader controls, and status/navigation bars.
+8. Check hardware Back and visible Back controls through Home, Create, Details, Settings, Players, Draw, Score, and Results. Confirm returning to Home or Details refreshes changes, canceled scores are discarded, and deleted events disappear. Check keyboard behavior, long names, larger text, screen readers, small/large displays, and status/navigation bars. Open valid and invalid `cuebracket://tournament/<id>` links, an active event's edit link, and a completed match's score link; confirm unavailable or locked pages fail safely.
 9. Upgrade an installation containing existing tournaments and confirm native SQLite migration preserves results.
 
 ## Build an Android APK
@@ -104,10 +106,21 @@ npx.cmd eas-cli build --platform android --profile production
 
 ```text
 app/
-  _layout.tsx                 Expo Router root and status bar
-  index.tsx                   Database startup, retry, and error boundary
+  _layout.tsx                 Router stack, database startup gate, and status bar
+  index.tsx                   Home route
+  create.tsx                  Tournament creation route
+  +not-found.tsx              Invalid path recovery
+  tournament/[id]/            Details, settings, players, draw, results routes
+    match/[matchId].tsx       Match score route
 src/
-  screens/TournamentApp.tsx   Tournament views and state-based navigation
+  DatabaseGate.tsx            Startup, retry, and render error handling for all routes
+  navigation.ts              Route ID validation and lifecycle guards
+  components/TournamentRoute.tsx  Shared focus-based data loading and route recovery
+  components/MatchCard.tsx    Accessible reusable match summary
+  screens/TournamentApp.tsx   Home and tournament history
+  screens/TournamentDetailScreen.tsx   Details, rounds, and standings
+  screens/MatchScoreScreen.tsx         Responsive score controls
+  screens/TournamentResultsScreen.tsx  Champion/tied leaders and final standings
   screens/PlayersScreen.tsx   Player registration and editing form
   screens/DrawScreen.tsx      Random draw preview and direct slot selection
   screens/TournamentSettingsScreen.tsx  Shared creation and setup editing form
@@ -115,6 +128,7 @@ src/
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
 tests/
+  navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
 app.json                      Android-only Expo configuration
 eas.json                      APK and AAB build profiles
@@ -134,7 +148,7 @@ Legacy knockout draws with empty first-round matches are flagged, but their draw
 - Confirmed scores cannot be edited or undone.
 - Standings use alphabetical ordering only to display otherwise tied rows; ties require a manual resolution outside the application.
 - Knockout brackets use round lists rather than connected diagrams.
-- Individual views share one Router route. Navigation state is not restored after restarting.
+- Each view has an Expo Router route. Tournament data refreshes when a route gains focus, and invalid/deleted tournament links have recovery actions. Locked setup pages and unavailable score links redirect to valid routes. Navigation history and unsaved form drafts are not persisted across application restarts.
 - Device persistence, accessibility, and fully offline APK operation still require Android acceptance testing.
 
 ## Local Git workflow
