@@ -1,10 +1,19 @@
 export type Format = 'knockout' | 'round_robin';
 export type Game = '8ball' | 'snooker';
+export type ScoringMode = 'best_of' | 'first_to';
+export type ScoringRule = { mode: ScoringMode; value: number };
+export type RoundStage = 'preliminary' | 'quarterfinal' | 'semifinal' | 'final';
+export type ScoringOptions = {
+  mode: ScoringMode;
+  label: string;
+  rounds: Partial<Record<RoundStage, ScoringRule>>;
+};
 export type TournamentSettings = {
   name: string;
   game: Game;
   format: Format;
   bestOf: number;
+  scoring?: ScoringOptions;
 };
 export type Player = { id: number; name: string };
 export type Match = {
@@ -18,6 +27,9 @@ export type Match = {
   s2: number | null;
   winner: number | null;
   status: 'pending' | 'done' | 'bye';
+  target?: number | null;
+  scoring_mode?: ScoringMode;
+  scoring_value?: number | null;
 };
 export type Tournament = {
   id: number;
@@ -27,6 +39,9 @@ export type Tournament = {
   best_of: number;
   status: 'setup' | 'active' | 'complete';
   created_at: string;
+  scoring_mode?: ScoringMode;
+  first_to_label?: string;
+  round_rules?: string;
 };
 export const winsNeeded = (bestOf: number) => Math.floor(bestOf / 2) + 1;
 export function validateSettings(game: Game, format: Format, bestOf: number) {
@@ -40,10 +55,12 @@ export function tiedLeaders<T extends { wins: number; diff: number }>(rankings: 
   const first = rankings[0];
   return first ? rankings.filter((r) => r.wins === first.wins && r.diff === first.diff) : [];
 }
-export function shuffle<T>(items: T[]): T[] {
+export function shuffle<T>(items: T[], random: () => number = Math.random): T[] {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const sample = random();
+    if (!Number.isFinite(sample) || sample < 0 || sample >= 1) throw Error('Invalid random sample');
+    const j = Math.floor(sample * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -62,6 +79,8 @@ export function knockoutPairs(
   ids: number[],
 ): { round: number; slot: number; p1: number | null; p2: number | null }[] {
   if (ids.length < 2) throw Error('Add at least 2 players');
+  if (new Set(ids).size !== ids.length || ids.some((id) => !Number.isSafeInteger(id) || id < 1))
+    throw Error('Draw requires unique player IDs');
   const size = 2 ** Math.ceil(Math.log2(ids.length));
   // Reserve one whole match for each BYE; fill only the remaining matches.
   const byes = size - ids.length;

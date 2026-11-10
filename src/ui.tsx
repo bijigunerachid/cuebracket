@@ -155,11 +155,13 @@ export function Field({
   value,
   onChangeText,
   placeholder,
+  keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (s: string) => void;
   placeholder?: string;
+  keyboardType?: 'default' | 'number-pad';
 }) {
   return (
     <>
@@ -167,6 +169,7 @@ export function Field({
       <TextInput
         accessibilityLabel={label}
         placeholder={placeholder}
+        keyboardType={keyboardType}
         placeholderTextColor={C.muted}
         value={value}
         onChangeText={onChangeText}

@@ -1,7 +1,24 @@
 import React, { useState } from 'react';
 import { Text } from 'react-native';
-import { Format, Game, Tournament, TournamentSettings, validateSettings } from '../engine';
-import { Btn, Choice, Field, Page, errorAlert, styles } from '../ui';
+import {
+  Format,
+  Game,
+  Tournament,
+  TournamentSettings,
+  validateSettings,
+  ScoringRule,
+  ScoringOptions,
+} from '../engine';
+import ScoringRuleEditor from '../components/ScoringRuleEditor';
+import {
+  baseScoringRule,
+  scoringOptions,
+  scoringTarget,
+  validateScoringOptions,
+  roundStages,
+  stageNames,
+} from '../rules';
+import { Btn, Card, Choice, Field, Page, errorAlert, styles } from '../ui';
 
 type Props = {
   initial?: Tournament;
@@ -13,16 +30,26 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
   const [name, setName] = useState(initial?.name ?? '');
   const [game, setGame] = useState<Game>(initial?.game ?? '8ball');
   const [format, setFormat] = useState<Format>(initial?.format ?? 'knockout');
-  const [bestOf, setBestOf] = useState(initial?.best_of ?? 5);
-  // Keep valid legacy match lengths selectable without silently replacing them.
-  const matchLengths = [...new Set([3, 5, 7, 9, ...(initial ? [initial.best_of] : [])])].sort(
-    (a, b) => a - b,
+  const [rule, setRule] = useState<ScoringRule>(() =>
+    initial ? baseScoringRule(initial) : { mode: 'best_of', value: 5 },
+  );
+  const [options, setOptions] = useState<ScoringOptions>(() =>
+    initial ? scoringOptions(initial) : { mode: 'best_of', label: 'First to', rounds: {} },
   );
   const save = () => {
     try {
       if (!name.trim()) throw Error('Tournament name is required');
+      const target = scoringTarget(rule);
+      const bestOf = rule.mode === 'best_of' ? rule.value : 2 * target - 1;
+      const scoring = {
+        ...options,
+        mode: rule.mode,
+        label: options.label.trim(),
+        rounds: format === 'knockout' ? options.rounds : {},
+      };
       validateSettings(game, format, bestOf);
-      onSave({ name: name.trim(), game, format, bestOf });
+      validateScoringOptions(scoring);
+      onSave({ name: name.trim(), game, format, bestOf, scoring });
     } catch (error) {
       errorAlert(error);
     }
@@ -58,12 +85,58 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
           { label: 'Round robin', value: 'round_robin' },
         ]}
       />
-      <Text style={styles.label}>Match length</Text>
-      <Choice
-        value={String(bestOf)}
-        onChange={(value) => setBestOf(Number(value))}
-        options={matchLengths.map((value) => ({ label: `Best of ${value}`, value: String(value) }))}
+      <Text style={styles.label}>Default match scoring</Text>
+      <ScoringRuleEditor rule={rule} onChange={setRule} />
+      <Field
+        label="Local First-to label (e.g. First to, A)"
+        value={options.label}
+        onChangeText={(label) => setOptions((current) => ({ ...current, label }))}
       />
+      <Text style={styles.muted}>
+        A3 can be used here for first to 3. This is configurable local terminology, not an official
+        universal Pool or Snooker rule.
+      </Text>
+      {format === 'knockout' ? (
+        <>
+          <Text style={styles.label}>Optional round-specific scoring</Text>
+          <Text style={styles.muted}>
+            The opening round with BYEs uses Preliminary. Later rounds use their bracket stage.
+            Unconfigured stages inherit the default. Some stages may not exist for your player
+            count.
+          </Text>
+          {roundStages.map((stage) => (
+            <Card key={stage}>
+              <Text style={styles.label}>{stageNames[stage]}</Text>
+              <Choice
+                value={options.rounds[stage] ? 'custom' : 'default'}
+                options={[
+                  { label: 'Default', value: 'default' },
+                  { label: 'Custom', value: 'custom' },
+                ]}
+                onChange={(value) =>
+                  setOptions((current) => {
+                    const rounds = { ...current.rounds };
+                    if (value === 'default') delete rounds[stage];
+                    else rounds[stage] = { ...rule };
+                    return { ...current, rounds };
+                  })
+                }
+              />
+              {options.rounds[stage] ? (
+                <ScoringRuleEditor
+                  rule={options.rounds[stage]!}
+                  onChange={(next) =>
+                    setOptions((current) => ({
+                      ...current,
+                      rounds: { ...current.rounds, [stage]: next },
+                    }))
+                  }
+                />
+              ) : null}
+            </Card>
+          ))}
+        </>
+      ) : null}
       <Text style={styles.muted}>
         {initial
           ? 'Registered players will be kept. These settings lock when the tournament starts.'

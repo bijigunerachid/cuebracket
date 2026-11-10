@@ -6,10 +6,11 @@ Normal tournament operation uses local storage and does not require an account o
 
 ## Implemented features
 
-- Tournament creation, setup editing, and deletion, game selection, knockout or single round-robin format, and best-of-3/5/7/9 matches.
+- Tournament creation, setup editing, and deletion, game selection, knockout or single round-robin format, and configurable First-to or odd-length Best-of matches.
 - Player registration, editing, and removal during setup, with blank-name and duplicate-name validation within each tournament.
 - Random draws and direct manual opponent selection, with a first-round preview for both formats and selectable knockout BYE recipients.
 - Automatic knockout BYEs, score recording, winner advancement, and a connected knockout bracket with a Round List alternative.
+- Random BYE recipients and opponents for arbitrary player counts of at least two, manual assignment overrides, draw totals, and optional round-specific scoring.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
 - Separate Expo Router screens, native Android back-stack navigation, visible back controls, focus-based data refresh, safe-area padding, and accessible controls with at least 48-point touch targets.
@@ -20,6 +21,26 @@ Normal tournament operation uses local storage and does not require an account o
 - npm.
 - An Android device with a compatible Expo Go version, or an Android Studio emulator.
 - For cloud APK builds: an Expo account and access to EAS Build.
+
+## Draw and scoring rules
+
+The knockout bracket expands to the next power of two. BYEs equal bracket size minus registered players; each BYE occupies a separate opening-round match. A shuffled player order randomly selects BYE recipients and pairs everyone else. Every registered player appears once. Manual mode swaps assignments to choose opponents or BYE recipients without duplicates. The confirmed order is saved exactly as previewed, without another shuffle.
+
+For example, 5 players produce 3 BYEs and 1 match to play, leaving 4 players. With 10 players, 6 BYEs and 2 matches leave 8 players. Power-of-two counts need no BYEs. There is no special 10-player format or fixed player-count limit in the draw algorithm; device memory and rendering still limit very large events. Automated checks cover 2-128 players.
+
+First-to and Best-of are different settings:
+
+| Setting    | Winning target |
+| ---------- | -------------- |
+| First to 3 | 3 racks/frames |
+| Best of 3  | 2 racks/frames |
+| Best of 5  | 3 racks/frames |
+
+The First-to label is configurable. Choosing `A` displays `A3` for first to 3, `A5` for first to 5, and so on. This is an organizer's local terminology, not an official universal Pool or Snooker rule. The UI also spells out the winning target. First-to accepts positive integer targets; Best-of accepts positive odd lengths. Scores must finish exactly at the winning target, with the opponent below it; ties, negative scores, and overshoots are rejected.
+
+Knockout organizers may override the default rule independently for preliminary rounds, quarterfinals, semifinals, and the final. The opening round with BYEs is classified as preliminary. Later stages follow the remaining bracket rounds; stages absent from a small event are not used. Larger earlier rounds also use the preliminary rule. Unconfigured stages inherit the default. Round robin always uses its default rule for every match.
+
+Draw preview lists opening matches, BYE recipients, matches to play, the number of players remaining afterward, and scoring by round. BYEs advance automatically with no score. New matches store their own scoring mode, value, and winning target when the draw is confirmed. Settings lock after starting, so every later score uses that saved match rule.
 
 ## Installation and development
 
@@ -45,7 +66,7 @@ npx.cmd expo install --check
 npx.cmd expo config --type public
 ```
 
-The automated tests cover route ID validation, tournament lifecycle redirects, stale match-link protection, and connected bracket geometry, plus real in-memory SQLite through an adapter for the Expo SQLite API. Bracket checks cover 2-128 players, several font-scale layouts, connector targets, bounds, round alignment, and preservation of input data. Connections are also checked against persisted winner advancement in the tournament simulations. Tests do not open the Android device database, render native views, or simulate a native navigation stack. Database coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
+The automated tests cover route ID validation, tournament lifecycle redirects, stale match-link protection, and connected bracket geometry, plus real in-memory SQLite through an adapter for the Expo SQLite API. Bracket checks cover 2-128 players, several font-scale layouts, connector targets, bounds, round alignment, and preservation of input data. Connections are also checked against persisted winner advancement. Tests include deterministic random-draw/BYE distribution samples, manual assignments, both score modes, migration failure/rollback/retry from version 1, legacy score preservation, and round-robin compatibility. Alongside the original 186 complete tournament simulations, 127 additional knockout simulations cover every size from 2 through 128 with mixed round-specific rules. Tests do not open the Android device database, render native views, or simulate a native navigation stack.
 
 To check Android JavaScript bundling and Hermes compilation:
 
@@ -118,7 +139,10 @@ src/
   components/TournamentRoute.tsx  Shared focus-based data loading and route recovery
   components/MatchCard.tsx    Accessible reusable match summary
   components/KnockoutBracket.tsx  Scrollable connected knockout diagram
+  components/ScoringRuleEditor.tsx  First-to / Best-of rule controls
   bracket.ts                 Pure bracket layout and connector geometry
+  rules.ts                   Draw summaries, scoring targets, and round-stage rules
+  migrations.ts              Additive scoring schema migration
   screens/TournamentApp.tsx   Home and tournament history
   screens/TournamentDetailScreen.tsx   Details, rounds, and standings
   screens/MatchScoreScreen.tsx         Responsive score controls
@@ -130,6 +154,7 @@ src/
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
 tests/
+  rules.cjs                   Random BYE distribution and scoring-rule checks
   bracket.cjs                 Bracket geometry and font-scale layout checks
   navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
@@ -143,11 +168,13 @@ tsconfig.json                 Strict TypeScript configuration
 
 SQLite stores data in `cuebracket.db` on the device. Schema version 1 normalizes legacy participant positions and adds a unique position index and validation triggers while preserving existing results.
 
+Schema version 2 adds scoring configuration and per-match scoring snapshots in a transaction. Existing tournament IDs, registrations, pairings, scores, winners, and statuses are preserved. Legacy tournaments remain Best-of; existing matches receive the corresponding legacy targets. Migration errors roll back and can be retried. The legacy `best_of` column remains an odd equivalent length for compatibility; for First-to rules the UI and saved scoring mode determine the displayed meaning. Existing tournament histories and confirmed draws are not reshuffled.
+
 Legacy knockout draws with empty first-round matches are flagged, but their draws and recorded results are not rewritten. Create a new tournament to use the corrected BYE algorithm. Uninstalling the application or clearing its data can remove local tournament history; backup and restore are not implemented.
 
 - Player changes are allowed only during setup. Reusable player selection is not implemented. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
 - Manual draw assigns players by swapping occupied first-round slots. The number and bracket positions of knockout BYEs are automatic; their recipients can be chosen. Round robin lets you choose first-round opponents and the resting player, with later rounds generated automatically so every pair meets once. Unconfirmed draw drafts are discarded when leaving the draw screen.
-- Tournament name, game, format, and match length can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; valid legacy match lengths remain available when editing.
+- Tournament name, game, format, scoring mode, winning target, and optional round overrides can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; legacy match lengths are retained when editing.
 - Confirmed scores cannot be edited or undone.
 - Standings use alphabetical ordering only to display otherwise tied rows; ties require a manual resolution outside the application.
 - Knockout events offer Connected Bracket and Round List views. The diagram shows saved pairings, BYEs, scores, and winners; it does not change tournament data. Names may be shortened visually inside diagram cards, but screen-reader labels include full names, and Round List remains available. Invalid stored match positions fall back to a message directing the organizer to Round List.

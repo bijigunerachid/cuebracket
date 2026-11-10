@@ -18,6 +18,7 @@ export default function EditRoute() {
               settings.game,
               settings.format,
               settings.bestOf,
+              settings.scoring,
             );
             router.dismissTo(tournamentPath(tournament.id));
           }}

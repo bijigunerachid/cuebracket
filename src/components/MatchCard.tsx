@@ -47,6 +47,9 @@ export default function MatchCard({
         </Text>
         <Text style={[styles.text, { flex: 1, textAlign: 'right' }]}>{name(match.p2)}</Text>
       </View>
+      {match.target != null ? (
+        <Text style={[styles.muted, { marginTop: 8 }]}>First to {match.target} racks/frames</Text>
+      ) : null}
       {ready ? <Text style={[styles.muted, { marginTop: 8 }]}>Tap to enter result</Text> : null}
     </TouchableOpacity>
   );
