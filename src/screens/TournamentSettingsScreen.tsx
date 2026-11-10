@@ -90,9 +90,7 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
       scrollToTopKey={step}
       footer={
         <Btn
-          title={
-            step < 3 ? 'Continue  →' : initial ? 'Save changes' : 'Create & register players  →'
-          }
+          title={step < 3 ? 'Continue' : initial ? 'Save changes' : 'Create & register players'}
           disabled={!name.trim()}
           onPress={step < 3 ? () => setStep(step + 1) : save}
         />

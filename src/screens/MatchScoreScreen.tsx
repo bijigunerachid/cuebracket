@@ -1,6 +1,6 @@
 import { displayScoringLabel } from '../presentation';
-import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Text, View, useWindowDimensions } from 'react-native';
 import type { Match, Player, Tournament } from '../engine';
 import { ruleForMatch, scoringTarget, validateTargetScore } from '../rules';
 import { Btn, Card, Page, ResponsiveRow, ScoreDisplay, StatusBadge, styles } from '../ui';
@@ -20,13 +20,20 @@ export default function MatchScoreScreen({
 }) {
   const [first, setFirst] = useState(0);
   const [second, setSecond] = useState(0);
+  const [nameHeight, setNameHeight] = useState(0);
+  const { width, fontScale } = useWindowDimensions();
+  useEffect(() => setNameHeight(0), [width, fontScale]);
+  const measureName = useCallback(
+    (height: number) => setNameHeight((current) => Math.max(current, height)),
+    [],
+  );
   const rule = ruleForMatch(tournament, match);
   const target = match.target ?? scoringTarget(rule);
   const valid = validateTargetScore(first, second, target);
   const winner = players.find((player) => player.id === (first > second ? match.p1 : match.p2));
   return (
     <Page
-      title="Every frame counts."
+      title="Record result"
       subtitle={`${tournament.name} · Round ${match.round} · Match ${match.slot + 1}`}
       onBack={onCancel}
       footer={
@@ -37,13 +44,12 @@ export default function MatchScoreScreen({
         />
       }
     >
-      <Card highlight>
+      <View style={{ marginBottom: 24 }}>
         <StatusBadge label={displayScoringLabel(rule, tournament.first_to_label)} />
-        <Text style={[styles.muted, { marginTop: 12 }]}>
-          Record the final {tournament.game === 'snooker' ? 'frames' : 'racks'} won. First to{' '}
-          {target} wins this match.
+        <Text style={[styles.muted, { marginTop: 6 }]}>
+          Final {tournament.game === 'snooker' ? 'frames' : 'racks'} won
         </Text>
-      </Card>
+      </View>
       <ResponsiveRow>
         {[
           { id: match.p1, score: first, set: setFirst, other: second },
@@ -57,11 +63,15 @@ export default function MatchScoreScreen({
                   name={name}
                   score={player.score}
                   winner={player.score === target && player.other < target}
+                  nameHeight={nameHeight}
+                  onNameLayout={measureName}
                 />
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
                   <View style={{ flex: 1 }}>
                     <Btn
-                      title="−"
+                      title="Decrease"
+                      icon="minus"
+                      iconOnly
                       accessibilityLabel={`Decrease ${name}`}
                       secondary
                       disabled={player.score === 0}
@@ -70,7 +80,9 @@ export default function MatchScoreScreen({
                   </View>
                   <View style={{ flex: 1 }}>
                     <Btn
-                      title="+"
+                      title="Increase"
+                      icon="plus"
+                      iconOnly
                       accessibilityLabel={`Increase ${name}`}
                       secondary
                       disabled={player.score === target}
@@ -89,9 +101,6 @@ export default function MatchScoreScreen({
           : first === target && second === target
             ? 'Both players cannot reach the winning target. Adjust one score.'
             : `The winner needs ${target}; the opponent must finish below ${target}.`}
-      </Text>
-      <Text style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>
-        You’ll confirm once more before saving. Confirmed scores are locked.
       </Text>
     </Page>
   );

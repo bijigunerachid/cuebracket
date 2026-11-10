@@ -71,7 +71,7 @@ export default function PlayersScreen({
       scrollToTopKey={editingId}
       footer={
         <Btn
-          title="Continue to draw  →"
+          title="Continue to draw"
           disabled={players.length < 2 || editingId !== null}
           onPress={onContinue}
         />

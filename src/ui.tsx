@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { theme } from './theme';
+import AppIcon, { type IconName } from './components/AppIcon';
 export { theme };
 export const C = theme.colors;
 export const styles = StyleSheet.create({
@@ -27,16 +28,16 @@ export const styles = StyleSheet.create({
     maxWidth: 760,
     alignSelf: 'center',
   },
-  title: { fontSize: theme.type.title, fontWeight: '700', letterSpacing: -1, color: C.white },
+  title: { fontSize: theme.type.title, fontWeight: '700', letterSpacing: -0.5, color: C.white },
   heading: { fontSize: theme.type.heading, fontWeight: '600', letterSpacing: -0.4, color: C.white },
-  subtitle: { fontSize: 15, lineHeight: 23, color: C.muted, marginTop: 8, marginBottom: 24 },
+  subtitle: { fontSize: 14, lineHeight: 21, color: C.muted, marginTop: 4, marginBottom: 16 },
   card: {
     backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: '#22382E',
+    borderColor: C.border,
     borderRadius: theme.radius.lg,
-    padding: theme.space.lg + theme.space.xs,
-    marginBottom: 14,
+    padding: theme.space.lg,
+    marginBottom: 12,
   },
   text: { color: C.white, fontSize: theme.type.body, lineHeight: 24 },
   muted: { color: C.muted, fontSize: theme.type.small, lineHeight: 21 },
@@ -44,34 +45,34 @@ export const styles = StyleSheet.create({
     color: C.muted,
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1.2,
+    letterSpacing: 0.5,
     marginBottom: 10,
     marginTop: 20,
   },
   input: {
     color: C.white,
-    backgroundColor: '#0C1914',
+    backgroundColor: C.card,
     borderColor: C.border,
     borderWidth: 1,
-    borderRadius: 16,
-    minHeight: 56,
+    borderRadius: theme.radius.sm,
+    minHeight: 52,
     padding: 16,
     fontSize: 16,
     marginBottom: 8,
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   button: {
-    minHeight: 54,
+    minHeight: 50,
     maxWidth: '100%',
     backgroundColor: C.primary,
-    borderRadius: theme.radius.pill,
-    paddingVertical: 15,
-    paddingHorizontal: 22,
+    borderRadius: theme.radius.sm,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
   },
-  buttonText: { color: C.bg, fontWeight: '700', fontSize: 16, textAlign: 'center' },
+  buttonText: { color: C.bg, fontWeight: '600', fontSize: 16, textAlign: 'center', flexShrink: 1 },
   secondary: { backgroundColor: C.raised, borderColor: C.border, borderWidth: 1 },
   pill: {
     minHeight: theme.touch,
@@ -79,15 +80,15 @@ export const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingVertical: 12,
     paddingHorizontal: 17,
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.sm,
     backgroundColor: C.card,
     marginRight: 8,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: C.border,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
     justifyContent: 'center',
   },
-  pillOn: { borderColor: C.green, backgroundColor: C.glow },
+  pillOn: { borderBottomColor: C.green, backgroundColor: C.raised },
   pillText: { color: C.white, fontWeight: '600', fontSize: 14 },
 });
 const MotionContext = createContext(true);
@@ -141,40 +142,23 @@ export function AppHeader({
   onBack?: () => void;
 }) {
   return (
-    <View>
-      <View style={[styles.row, { marginBottom: 24 }]}>
+    <View style={{ marginBottom: 16 }}>
+      <View style={[styles.row, { minHeight: 48 }]}>
         {onBack ? (
           <TouchableOpacity
             onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={{ minHeight: 48, minWidth: 48, justifyContent: 'center' }}
+            style={{ minWidth: 48, minHeight: 48, justifyContent: 'center' }}
           >
-            <Text style={{ color: C.white, fontSize: 26 }}>←</Text>
+            <AppIcon name="arrow-left" />
           </TouchableOpacity>
-        ) : (
-          <View style={[styles.row, { gap: 8 }]}>
-            <View
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: C.green,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: C.bg, fontWeight: '900' }}>8</Text>
-            </View>
-            <Text style={{ color: C.white, fontSize: 16, fontWeight: '700' }}>CueBracket</Text>
-          </View>
-        )}
-        <StatusBadge label="On device" />
+        ) : null}
+        <Text accessibilityRole="header" style={[styles.title, { flex: 1 }]}>
+          {title}
+        </Text>
       </View>
-      <Text accessibilityRole="header" style={styles.title}>
-        {title}
-      </Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : <View style={{ height: 24 }} />}
+      {subtitle ? <Text style={[styles.muted, { marginTop: 4 }]}>{subtitle}</Text> : null}
     </View>
   );
 }
@@ -237,6 +221,8 @@ export function Btn({
   disabled,
   accessibilityLabel,
   danger,
+  icon,
+  iconOnly,
 }: {
   title: string;
   onPress: () => void;
@@ -244,6 +230,8 @@ export function Btn({
   disabled?: boolean;
   accessibilityLabel?: string;
   danger?: boolean;
+  icon?: IconName;
+  iconOnly?: boolean;
 }) {
   const reduced = useReducedMotion();
   return (
@@ -254,11 +242,31 @@ export function Btn({
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, secondary && styles.secondary, disabled && { opacity: 0.4 }]}
+      style={[
+        styles.button,
+        { flexDirection: 'row', gap: 10 },
+        secondary && styles.secondary,
+        disabled && { backgroundColor: C.raised },
+      ]}
     >
-      <Text style={[styles.buttonText, secondary && { color: danger ? C.danger : C.white }]}>
-        {title}
-      </Text>
+      {icon ? (
+        <AppIcon
+          name={icon}
+          size={20}
+          color={disabled ? C.muted : secondary ? (danger ? C.danger : C.white) : C.bg}
+        />
+      ) : null}
+      {!iconOnly ? (
+        <Text
+          style={[
+            styles.buttonText,
+            secondary && { color: danger ? C.danger : C.white },
+            disabled && { color: C.muted },
+          ]}
+        >
+          {title}
+        </Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -316,40 +324,12 @@ export function Card({
   highlight = false,
 }: React.PropsWithChildren<{ highlight?: boolean }>) {
   return (
-    <View
-      style={[
-        styles.card,
-        highlight && { backgroundColor: C.glow, borderColor: '#32674A', overflow: 'hidden' },
-      ]}
-    >
-      {highlight ? (
-        <View
-          pointerEvents="none"
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          style={StyleSheet.absoluteFill}
-        >
-          {[0, 1, 2].map((index) => (
-            <View
-              key={index}
-              style={{
-                position: 'absolute',
-                width: 240 + index * 90,
-                height: 240 + index * 90,
-                borderRadius: 300,
-                right: -100 - index * 40,
-                top: -120 - index * 30,
-                backgroundColor: '#69E6AC',
-                opacity: 0.025,
-              }}
-            />
-          ))}
-        </View>
-      ) : null}
+    <View style={[styles.card, highlight && { borderLeftWidth: 3, borderLeftColor: C.green }]}>
       {children}
     </View>
   );
 }
+
 export function StatusBadge({
   label,
   tone = 'green',
@@ -358,31 +338,23 @@ export function StatusBadge({
   tone?: 'green' | 'gold' | 'muted';
 }) {
   return (
-    <View
+    <Text
       style={{
         alignSelf: 'flex-start',
-        borderRadius: 999,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        backgroundColor: tone === 'gold' ? '#342F1B' : '#1B3529',
         maxWidth: '100%',
+        color: tone === 'gold' ? C.gold : tone === 'muted' ? C.muted : C.green,
+        fontSize: 13,
+        fontWeight: '600',
       }}
     >
-      <Text
-        style={{
-          color: tone === 'gold' ? C.gold : tone === 'muted' ? C.muted : C.green,
-          fontSize: 13,
-          fontWeight: '600',
-        }}
-      >
-        {label}
-      </Text>
-    </View>
+      {label}
+    </Text>
   );
 }
+
 export function SectionHeading({ title, detail }: { title: string; detail?: string }) {
   return (
-    <View style={[styles.row, { flexWrap: 'wrap', marginTop: 26, marginBottom: 16 }]}>
+    <View style={[styles.row, { flexWrap: 'wrap', marginTop: 24, marginBottom: 12 }]}>
       <Text accessibilityRole="header" style={styles.heading}>
         {title}
       </Text>
@@ -404,7 +376,7 @@ export function EmptyState({
   return (
     <Card>
       <View style={{ gap: 10, paddingVertical: 12 }}>
-        <Text style={[styles.heading, { color: C.green }]}>{title}</Text>
+        <Text style={styles.heading}>{title}</Text>
         <Text style={styles.muted}>{description}</Text>
         {action && onAction ? <Btn title={action} onPress={onAction} /> : null}
       </View>
@@ -449,7 +421,7 @@ export function Progress({ value, total, label }: { value: number; total: number
 export function SetupProgress({ step }: { step: number }) {
   const labels = ['Information', 'Game & format', 'Scoring', 'Players', 'Draw preview', 'Confirm'];
   return (
-    <View style={{ marginBottom: 20 }}>
+    <View style={{ marginBottom: 16 }}>
       <StatusBadge label={`Step ${step} of 6 · ${labels[step - 1]}`} />
       <View style={{ flexDirection: 'row', gap: 5, marginTop: 14 }}>
         {labels.map((label, index) => (
@@ -457,7 +429,7 @@ export function SetupProgress({ step }: { step: number }) {
             key={label}
             style={{
               flex: 1,
-              height: 3,
+              height: 2,
               borderRadius: 2,
               backgroundColor: index < step ? C.green : C.border,
             }}
@@ -541,15 +513,26 @@ export function ScoreDisplay({
   name,
   score,
   winner,
+  nameHeight = 0,
+  onNameLayout,
 }: {
   name: string;
   score: number;
   winner: boolean;
+  nameHeight?: number;
+  onNameLayout?: (height: number) => void;
 }) {
   return (
     <Reveal change={score}>
       <View style={{ alignItems: 'center' }}>
-        <Text style={[styles.heading, { textAlign: 'center' }]}>{name}</Text>
+        <View style={{ minHeight: nameHeight, width: '100%', justifyContent: 'center' }}>
+          <Text
+            onLayout={(event) => onNameLayout?.(Math.ceil(event.nativeEvent.layout.height))}
+            style={[styles.heading, { textAlign: 'center' }]}
+          >
+            {name}
+          </Text>
+        </View>
         <Text
           accessibilityLabel={`${name}, ${score}`}
           accessibilityLiveRegion="polite"
@@ -563,7 +546,11 @@ export function ScoreDisplay({
         >
           {score}
         </Text>
-        {winner ? <StatusBadge label="Winning score" /> : null}
+        <Text
+          style={{ color: winner ? C.green : C.muted, fontSize: 13, lineHeight: 20, minHeight: 20 }}
+        >
+          {winner ? 'Winning score' : 'Racks / frames'}
+        </Text>
       </View>
     </Reveal>
   );

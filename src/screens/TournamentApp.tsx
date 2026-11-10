@@ -6,19 +6,7 @@ import type { Match, Player, Tournament } from '../engine';
 import { tournamentPath } from '../navigation';
 import TournamentCard from '../components/TournamentCard';
 import MatchCard from '../components/MatchCard';
-import {
-  Btn,
-  C,
-  Card,
-  Choice,
-  EmptyState,
-  Field,
-  Page,
-  ResponsiveRow,
-  SectionHeading,
-  StatusBadge,
-  styles,
-} from '../ui';
+import { Btn, Choice, EmptyState, Field, Page, SectionHeading, styles } from '../ui';
 
 type EventData = { tournament: Tournament; matches: Match[]; players: Player[] };
 export default function TournamentApp({ library = false }: { library?: boolean }) {
@@ -48,7 +36,6 @@ export default function TournamentApp({ library = false }: { library?: boolean }
     }, [refresh]),
   );
   const active = events.filter(({ tournament }) => tournament.status === 'active');
-  const completed = events.filter(({ tournament }) => tournament.status === 'complete');
   const pending = active.flatMap((event) =>
     event.matches
       .filter((match) => match.status === 'pending' && match.p1 !== null && match.p2 !== null)
@@ -79,12 +66,8 @@ export default function TournamentApp({ library = false }: { library?: boolean }
     ));
   return (
     <Page
-      title={library ? 'Your tournaments' : 'Good games.\nGreat competition.'}
-      subtitle={
-        library
-          ? 'Every draw, every result. All on your device.'
-          : 'Your local competition starts here.'
-      }
+      title={library ? 'Tournaments' : 'CueBracket'}
+      subtitle={library ? 'Draws and tournament history' : '8-Ball Pool & Snooker'}
     >
       {error ? (
         <EmptyState
@@ -97,46 +80,18 @@ export default function TournamentApp({ library = false }: { library?: boolean }
         <>
           {!library ? (
             <>
-              <Card highlight>
-                <View style={{ gap: 10 }}>
-                  <StatusBadge label="THE NEXT CHAMPION STARTS HERE" />
-                  <Text style={[styles.heading, { fontSize: 28 }]}>Set the table.</Text>
-                  <Text style={styles.muted}>Pool or snooker. Your players, your rules.</Text>
-                  <Btn title="+  Create tournament" onPress={() => router.push('/create')} />
-                </View>
-              </Card>
-              <ResponsiveRow>
-                {[
-                  { value: active.length, label: 'In progress' },
-                  { value: completed.length, label: 'Completed' },
-                  { value: pending.length, label: 'Ready to play' },
-                ].map((stat) => (
-                  <View
-                    key={stat.label}
-                    style={{
-                      flex: 1,
-                      backgroundColor: C.card,
-                      borderRadius: 20,
-                      padding: 16,
-                      minWidth: 0,
-                    }}
-                  >
-                    <Text style={{ fontSize: 30, color: C.white, fontWeight: '600' }}>
-                      {stat.value}
-                    </Text>
-                    <Text style={styles.muted}>{stat.label}</Text>
-                  </View>
-                ))}
-              </ResponsiveRow>
-              <SectionHeading title="In play" detail={`${active.length} active`} />
+              <Btn title="New tournament" icon="plus" onPress={() => router.push('/create')} />
+              {events.length > 0 ? (
+                <Text style={[styles.muted, { marginTop: 16 }]}>
+                  {active.length} active · {pending.length} matches ready for a result
+                </Text>
+              ) : null}
               {active.length ? (
-                cards(active.slice(0, 3))
-              ) : (
-                <EmptyState
-                  title="A clear table"
-                  description="Start a tournament to see live progress here."
-                />
-              )}
+                <>
+                  <SectionHeading title="Active tournaments" />
+                  {cards(active.slice(0, 3))}
+                </>
+              ) : null}
               {pending.length ? (
                 <>
                   <SectionHeading title="Ready for a result" detail={`${pending.length} matches`} />
@@ -154,24 +109,32 @@ export default function TournamentApp({ library = false }: { library?: boolean }
                   ))}
                 </>
               ) : null}
-              <SectionHeading title="Recent tournaments" />
-              {events.length ? (
-                cards(events.slice(0, 3))
-              ) : (
-                <EmptyState
-                  title="Your story starts here"
-                  description="Created tournaments and completed results will appear here."
-                />
-              )}
+              {events.some(({ tournament }) => tournament.status !== 'active') ? (
+                <>
+                  <SectionHeading title="Recent tournaments" />
+                  {cards(
+                    events.filter(({ tournament }) => tournament.status !== 'active').slice(0, 3),
+                  )}
+                </>
+              ) : null}
+              {events.length === 0 ? (
+                <View style={{ marginTop: 32 }}>
+                  <EmptyState
+                    title="No tournaments yet"
+                    description="Create an event, add your players, and review the draw before starting."
+                  />
+                </View>
+              ) : null}
               <Btn
-                title="See all tournaments  →"
+                title="All tournaments"
+                icon="arrow-right"
                 secondary
                 onPress={() => router.navigate('/tournaments')}
               />
             </>
           ) : (
             <>
-              <Btn title="+  Create tournament" onPress={() => router.push('/create')} />
+              <Btn title="New tournament" icon="plus" onPress={() => router.push('/create')} />
               <Field
                 label="Search tournaments"
                 placeholder="Find your competition"

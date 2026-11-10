@@ -46,6 +46,7 @@ for (const [foreground, background] of [
   [colors.green, colors.glow],
   [colors.bg, colors.primary],
   [colors.danger, colors.raised],
+  [colors.muted, colors.raised],
   [colors.gold, '#342F1B'],
   [colors.muted, '#1B3529'],
 ]) {
