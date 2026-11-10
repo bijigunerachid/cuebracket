@@ -14,6 +14,23 @@ export const participants=(id:number)=>db.getAllSync<Player>('SELECT p.* FROM pl
 export const matches=(id:number)=>db.getAllSync<Match>('SELECT * FROM matches WHERE tournament_id=? ORDER BY round,slot',id);
 export function createTournament(name:string,game:Game,format:Format,bestOf:number){if(!name.trim())throw Error('Tournament name is required');validateSettings(game,format,bestOf);return Number(db.runSync('INSERT INTO tournaments(name,game,format,best_of) VALUES(?,?,?,?)',name.trim(),game,format,bestOf).lastInsertRowId)}
 export function addPlayer(id:number,name:string){const trimmed=name.trim();if(!trimmed)throw Error('Enter a player name');const t=tournament(id);if(!t||t.status!=='setup')throw Error('Tournament already started');const existing=participants(id);if(existing.some(p=>p.name.toLowerCase()===trimmed.toLowerCase()))throw Error('Player already registered');db.withTransactionSync(()=>{const pid=Number(db.runSync('INSERT INTO players(name) VALUES(?)',trimmed).lastInsertRowId);const position=db.getFirstSync<{next:number}>('SELECT COALESCE(MAX(position),-1)+1 next FROM tournament_players WHERE tournament_id=?',id)!.next;db.runSync('INSERT INTO tournament_players VALUES(?,?,?)',id,pid,position)});}
+export function renamePlayer(id:number,pid:number,name:string){
+ const trimmed=name.trim();
+ if(!trimmed)throw Error('Enter a player name');
+ db.withTransactionSync(()=>{
+  const t=tournament(id);
+  if(!t)throw Error('Tournament not found');
+  if(t.status!=='setup')throw Error('Tournament already started');
+  const registered=participants(id);
+  if(!registered.some(p=>p.id===pid))throw Error('Player not registered in this tournament');
+  if(registered.some(p=>p.id!==pid&&p.name.toLowerCase()===trimmed.toLowerCase()))throw Error('Player already registered');
+  // Legacy databases may share a player across tournaments. Do not rename history.
+  const otherRegistration=db.getFirstSync<{n:number}>('SELECT COUNT(*) n FROM tournament_players WHERE player_id=? AND tournament_id<>?',pid,id)!.n;
+  const referencedMatch=db.getFirstSync<{n:number}>('SELECT COUNT(*) n FROM matches WHERE p1=? OR p2=? OR winner=?',pid,pid,pid)!.n;
+  if(otherRegistration>0||referencedMatch>0)throw Error('This player is used in another registration or match and cannot be renamed');
+  db.runSync('UPDATE players SET name=? WHERE id=?',trimmed,pid);
+ });
+}
 export function removePlayer(id:number,pid:number){if(tournament(id)?.status!=='setup')throw Error('Tournament already started');db.withTransactionSync(()=>{db.runSync('DELETE FROM tournament_players WHERE tournament_id=? AND player_id=?',id,pid);cleanupPlayers();})}
 export function deleteTournament(id:number){db.withTransactionSync(()=>{db.runSync('DELETE FROM tournaments WHERE id=?',id);cleanupPlayers();})}
 export function startTournament(id:number,orderedIds:number[]){const t=tournament(id);if(!t||t.status!=='setup')throw Error('Tournament cannot be started');validateSettings(t.game,t.format,t.best_of);const registered=participants(id).map(p=>p.id);if(registered.length<2)throw Error('Add at least 2 players');if(orderedIds.length!==registered.length||new Set(orderedIds).size!==registered.length||orderedIds.some(p=>!registered.includes(p)))throw Error('Draw must contain each player exactly once');const pairs=t.format==='knockout'?knockoutPairs(orderedIds):roundRobinPairs(orderedIds);db.withTransactionSync(()=>{
