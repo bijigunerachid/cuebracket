@@ -32,6 +32,7 @@ export default function TournamentSettingsScreen({ initial, onSave, onCancel }: 
     <Page
       title={initial ? 'Edit Tournament' : 'New Tournament'}
       subtitle={initial ? 'Update your event before starting' : 'Set up your competition'}
+      onBack={onCancel}
     >
       <Field
         label="Tournament name"

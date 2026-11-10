@@ -6,13 +6,14 @@ export const C = {
   card: '#14231F',
   border: '#2B4139',
   green: '#22C55E',
+  primary: '#16A34A',
   muted: '#9BAFA7',
   white: '#F8FAFC',
   gold: '#D4AF37',
 };
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  body: { padding: 20, paddingBottom: 50 },
+  body: { padding: 20, paddingBottom: 50, width: '100%', maxWidth: 760, alignSelf: 'center' },
   title: { fontSize: 28, fontWeight: '800', color: C.white },
   subtitle: { fontSize: 14, color: C.muted, marginTop: 5, marginBottom: 16 },
   card: {
@@ -38,15 +39,20 @@ export const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   button: {
-    backgroundColor: '#168B45',
+    minHeight: 48,
+    maxWidth: '100%',
+    backgroundColor: C.primary,
     borderRadius: 13,
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
   },
-  buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16, textAlign: 'center' },
   secondary: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1 },
   pill: {
+    minHeight: 48,
+    minWidth: 48,
+    maxWidth: '100%',
     paddingVertical: 11,
     paddingHorizontal: 15,
     borderRadius: 12,
@@ -63,7 +69,8 @@ export function Page({
   title,
   subtitle,
   children,
-}: React.PropsWithChildren<{ title: string; subtitle?: string }>) {
+  onBack,
+}: React.PropsWithChildren<{ title: string; subtitle?: string; onBack?: () => void }>) {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -73,8 +80,21 @@ export function Page({
         { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 30 },
       ]}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
-      <Text style={styles.title}>{title}</Text>
+      {onBack ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={onBack}
+          style={{ minHeight: 48, justifyContent: 'center', marginBottom: 8 }}
+        >
+          <Text style={{ color: C.green, fontSize: 16 }}>← Back</Text>
+        </TouchableOpacity>
+      ) : null}
+      <Text accessibilityRole="header" style={styles.title}>
+        {title}
+      </Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : <View style={{ height: 18 }} />}
       {children}
     </ScrollView>
@@ -100,7 +120,7 @@ export function Btn({
       onPress={onPress}
       style={[styles.button, secondary && styles.secondary, disabled && { opacity: 0.4 }]}
     >
-      <Text style={styles.buttonText}>{title}</Text>
+      <Text style={[styles.buttonText, !secondary && { color: C.bg }]}>{title}</Text>
     </TouchableOpacity>
   );
 }

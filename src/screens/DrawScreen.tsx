@@ -80,6 +80,7 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
     <Page
       title="Draw / Opponents"
       subtitle={`${tournamentName} · ${format === 'knockout' ? 'Knockout' : 'Round robin'}`}
+      onBack={onBack}
     >
       <Choice
         value={mode}

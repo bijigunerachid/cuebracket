@@ -48,7 +48,11 @@ export default function PlayersScreen({
   };
 
   return (
-    <Page title="Players" subtitle={`${tournamentName} · ${players.length} registered`}>
+    <Page
+      title="Players"
+      subtitle={`${tournamentName} · ${players.length} registered`}
+      onBack={onBack}
+    >
       <Card>
         {editing ? <Text style={styles.text}>Editing {editing.name}</Text> : null}
         <Field
