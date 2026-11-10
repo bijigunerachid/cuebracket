@@ -40,6 +40,7 @@ The `.cmd` commands avoid PowerShell script-execution restrictions without chang
 ```powershell
 npm.cmd run typecheck
 npm.cmd test
+npm.cmd run format:check
 npx.cmd expo install --check
 npx.cmd expo config --type public
 ```
@@ -53,6 +54,17 @@ npx.cmd expo export --platform android --output-dir .verification/android
 ```
 
 This export is not an APK, a native Android build, or a device test. Generated verification output is ignored by Git. Expo's dependency check uses installed SDK metadata when run offline; it is not a vulnerability audit.
+
+## Code formatting
+
+Prettier keeps TypeScript, JSX, JSON configuration, tests, and documentation consistently formatted. Source code uses two-space indentation, single quotes, semicolons, and a 100-character target line width. JSX elements and long expressions are expanded across lines for readability.
+
+```powershell
+npm.cmd run format
+npm.cmd run format:check
+```
+
+The first command formats files; the second checks them without writing changes. Generated output, dependencies, local editor settings, and `package-lock.json` are excluded. npm manages the lockfile; do not format or edit its dependency entries manually.
 
 ## Manual Android testing
 

@@ -1,0 +1,8 @@
+node_modules/
+.expo/
+.verification/
+.vscode/
+dist/
+build/
+coverage/
+package-lock.json
