@@ -13,6 +13,7 @@ Normal tournament operation uses local storage and does not require an account o
 - Random BYE recipients and opponents for arbitrary player counts of at least two, manual assignment overrides, draw totals, and optional round-specific scoring.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
+- Home history includes name search, combined status/game filters, result counts, creation dates, and a Clear filters action. Filters stay selected while navigating within the current session and reset when the home screen is remounted; filtering never deletes stored events.
 - Separate Expo Router screens, native Android back-stack navigation, visible back controls, focus-based data refresh, safe-area padding, and accessible controls with at least 48-point touch targets.
 
 ## Requirements
@@ -102,6 +103,7 @@ Before treating a release as ready:
 7. Repeat core flows in an installed APK with airplane mode enabled.
 8. Check hardware Back and visible Back controls through Home, Create, Details, Settings, Players, Draw, Score, and Results. Confirm returning to Home or Details refreshes changes, canceled scores are discarded, and deleted events disappear. Check keyboard behavior, long names, larger text, screen readers, small/large displays, and status/navigation bars. Open valid and invalid `cuebracket://tournament/<id>` links, an active event's edit link, and a completed match's score link; confirm unavailable or locked pages fail safely.
 9. Upgrade an installation containing existing tournaments and confirm native SQLite migration preserves results.
+10. On Home, search using mixed case and surrounding spaces, combine status and game filters, and try a search with no results. Clear filters to restore all events. Open an event and return, complete an event or delete it, and check that the refreshed list still respects the selected filters. Check dates, large text, keyboard dismissal, and screen-reader filter labels.
 
 ## Build an Android APK
 

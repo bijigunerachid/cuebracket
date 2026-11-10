@@ -5,12 +5,26 @@ import * as store from '../db';
 import type { Tournament } from '../engine';
 import { baseScoringRule, scoringLabel } from '../rules';
 import { tournamentPath } from '../navigation';
-import { Btn, C, Card, Page, styles } from '../ui';
+import { Btn, C, Card, Choice, Field, Page, styles } from '../ui';
 
 // Home route: refresh persisted tournament history whenever this screen gains focus.
 export default function TournamentApp() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<Tournament['status'] | 'all'>('all');
+  const [game, setGame] = useState<Tournament['game'] | 'all'>('all');
+  const visibleTournaments = tournaments.filter(
+    (tournament) =>
+      tournament.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) &&
+      (status === 'all' || tournament.status === status) &&
+      (game === 'all' || tournament.game === game),
+  );
+  const clearFilters = () => {
+    setQuery('');
+    setStatus('all');
+    setGame('all');
+  };
   const refresh = useCallback(() => {
     try {
       setTournaments(store.tournaments());
@@ -28,6 +42,43 @@ export default function TournamentApp() {
     <Page title="CueBracket" subtitle="Pool & Snooker · Offline Tournament Manager">
       <Btn title="Create Tournament" onPress={() => router.push('/create')} />
       <Text style={styles.label}>YOUR TOURNAMENTS</Text>
+      {!error && tournaments.length > 0 ? (
+        <Card>
+          <Field
+            label="Search tournaments"
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Tournament name"
+          />
+          <Text style={styles.label}>STATUS</Text>
+          <Choice<Tournament['status'] | 'all'>
+            value={status}
+            onChange={setStatus}
+            options={[
+              { label: 'All statuses', value: 'all' },
+              { label: 'Setup', value: 'setup' },
+              { label: 'In progress', value: 'active' },
+              { label: 'Completed', value: 'complete' },
+            ]}
+          />
+          <Text style={styles.label}>GAME</Text>
+          <Choice<Tournament['game'] | 'all'>
+            value={game}
+            onChange={setGame}
+            options={[
+              { label: 'All games', value: 'all' },
+              { label: '8-Ball Pool', value: '8ball' },
+              { label: 'Snooker', value: 'snooker' },
+            ]}
+          />
+          <Text style={styles.muted} accessibilityLiveRegion="polite">
+            Showing {visibleTournaments.length} of {tournaments.length} tournaments
+          </Text>
+          {query !== '' || status !== 'all' || game !== 'all' ? (
+            <Btn title="Clear filters" secondary onPress={clearFilters} />
+          ) : null}
+        </Card>
+      ) : null}
       {error ? (
         <Card>
           <Text style={styles.text}>{error}</Text>
@@ -37,8 +88,12 @@ export default function TournamentApp() {
         <Card>
           <Text style={styles.muted}>No tournaments yet. Create your first competition.</Text>
         </Card>
+      ) : visibleTournaments.length === 0 ? (
+        <Card>
+          <Text style={styles.muted}>No tournaments match your search and filters.</Text>
+        </Card>
       ) : (
-        tournaments.map((tournament) => (
+        visibleTournaments.map((tournament) => (
           <TouchableOpacity
             key={tournament.id}
             style={styles.card}
@@ -59,6 +114,11 @@ export default function TournamentApp() {
               {tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} ·{' '}
               {scoringLabel(baseScoringRule(tournament), tournament.first_to_label)}
             </Text>
+            {Number.isFinite(Date.parse(tournament.created_at)) ? (
+              <Text style={[styles.muted, { marginTop: 8 }]}>
+                Created {new Date(tournament.created_at).toLocaleDateString()}
+              </Text>
+            ) : null}
           </TouchableOpacity>
         ))
       )}
