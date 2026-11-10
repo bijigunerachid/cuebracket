@@ -23,6 +23,7 @@ export default function DetailRoute() {
               if (canScoreMatch(data.tournament, match)) router.push(`${path}/match/${match.id}`);
             }}
             onHome={() => router.dismissTo('/')}
+            onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
             onDelete={() =>
               Alert.alert(
                 'Delete tournament?',

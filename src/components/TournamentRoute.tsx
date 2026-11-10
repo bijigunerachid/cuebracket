@@ -3,7 +3,7 @@ import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-rou
 import * as store from '../db';
 import type { Match, Player, Tournament } from '../engine';
 import { parseRouteId, tournamentRedirect, TournamentView } from '../navigation';
-import { Btn, Page } from '../ui';
+import { Btn, Page, LoadingState } from '../ui';
 
 export type TournamentData = {
   tournament: Tournament;
@@ -55,7 +55,12 @@ export default function TournamentRoute({ view = 'detail', children }: Props) {
         <Btn title="All Tournaments" secondary onPress={() => router.dismissTo('/')} />
       </Page>
     );
-  if (!data || data.tournament.id !== id) return <Page title="Loading Tournament" />;
+  if (!data || data.tournament.id !== id)
+    return (
+      <Page title="Your tournament">
+        <LoadingState />
+      </Page>
+    );
   const redirect = tournamentRedirect(view, data.tournament, data.players.length);
   if (redirect) return <Redirect href={redirect} />;
   return <>{children(data, refresh)}</>;

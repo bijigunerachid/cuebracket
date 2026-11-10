@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Btn } from './ui';
+import { Page, Btn, LoadingState } from './ui';
 import * as store from './db';
 
 class DatabaseBoundary extends React.Component<React.PropsWithChildren, { error: string | null }> {
@@ -43,7 +43,11 @@ function DatabaseReady({ children }: React.PropsWithChildren) {
         title={error ? 'Unable to open database' : 'Loading CueBracket'}
         subtitle={error ?? 'Opening your offline tournaments...'}
       >
-        {error ? <Btn title="Retry" onPress={initialize} /> : null}
+        {error ? (
+          <Btn title="Retry" onPress={initialize} />
+        ) : (
+          <LoadingState label="Opening your offline tournaments…" />
+        )}
       </Page>
     );
   return <>{children}</>;
