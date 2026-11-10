@@ -1,0 +1,46 @@
+# Dependencies and local tooling
+node_modules/
+.expo/
+.verification/
+.vscode/
+.idea/
+
+# Build and test outputs
+dist/
+build/
+coverage/
+.gradle/
+.cxx/
+*.apk
+*.aab
+*.apks
+*.log
+*.tsbuildinfo
+
+# Device data and SQLite sidecar files
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Environment configuration and signing credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+credentials.json
+google-services.json
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
