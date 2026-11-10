@@ -65,6 +65,36 @@ export function addPlayer(id: number, name: string) {
     db.runSync('INSERT INTO tournament_players VALUES(?,?,?)', id, pid, position);
   });
 }
+export function updateTournament(
+  id: number,
+  name: string,
+  game: Game,
+  format: Format,
+  bestOf: number,
+) {
+  const trimmed = name.trim();
+  if (!trimmed) throw Error('Tournament name is required');
+  validateSettings(game, format, bestOf);
+  db.withTransactionSync(() => {
+    const current = tournament(id);
+    if (!current) throw Error('Tournament not found');
+    if (current.status !== 'setup') throw Error('Tournament settings are locked after starting');
+    const existingDraw = db.getFirstSync<{ n: number }>(
+      'SELECT COUNT(*) n FROM matches WHERE tournament_id=?',
+      id,
+    );
+    if (existingDraw?.n)
+      throw Error('Tournament settings are locked because a draw already exists');
+    db.runSync(
+      'UPDATE tournaments SET name=?,game=?,format=?,best_of=? WHERE id=?',
+      trimmed,
+      game,
+      format,
+      bestOf,
+      id,
+    );
+  });
+}
 export function renamePlayer(id: number, pid: number, name: string) {
   const trimmed = name.trim();
   if (!trimmed) throw Error('Enter a player name');

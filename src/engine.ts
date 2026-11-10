@@ -1,5 +1,11 @@
 export type Format = 'knockout' | 'round_robin';
 export type Game = '8ball' | 'snooker';
+export type TournamentSettings = {
+  name: string;
+  game: Game;
+  format: Format;
+  bestOf: number;
+};
 export type Player = { id: number; name: string };
 export type Match = {
   id: number;
