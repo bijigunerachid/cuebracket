@@ -12,6 +12,7 @@ function load(file, requireModule = require) {
   return module.exports;
 }
 const engine = load('src/engine.ts');
+const bracket = load('src/bracket.ts');
 const sql = new DatabaseSync(':memory:');
 const adapter = {
   execSync: (query) => sql.exec(query),
@@ -412,6 +413,20 @@ for (const format of ['knockout', 'round_robin']) {
       assert.equal(store.tournament(id).status, 'complete', `${format}: ${count}, ${path}`);
       assert.equal(played, format === 'knockout' ? count - 1 : (count * (count - 1)) / 2);
       assert.ok(store.matches(id).every((m) => m.status !== 'pending'));
+      if (format === 'knockout') {
+        const completed = store.matches(id);
+        const layout = bracket.buildKnockoutLayout(completed, {
+          cardWidth: 260,
+          cardHeight: 192,
+          columnGap: 48,
+          rowGap: 24,
+        });
+        for (const edge of layout.edges) {
+          const source = completed.find((match) => match.id === edge.from);
+          const target = completed.find((match) => match.id === edge.to);
+          assert.equal(source.slot % 2 === 0 ? target.p1 : target.p2, source.winner);
+        }
+      }
       store.deleteTournament(id);
       assert.equal(store.matches(id).length, 0);
     }

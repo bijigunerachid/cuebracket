@@ -9,7 +9,7 @@ Normal tournament operation uses local storage and does not require an account o
 - Tournament creation, setup editing, and deletion, game selection, knockout or single round-robin format, and best-of-3/5/7/9 matches.
 - Player registration, editing, and removal during setup, with blank-name and duplicate-name validation within each tournament.
 - Random draws and direct manual opponent selection, with a first-round preview for both formats and selectable knockout BYE recipients.
-- Automatic knockout BYEs, score recording, winner advancement, and round lists.
+- Automatic knockout BYEs, score recording, winner advancement, and a connected knockout bracket with a Round List alternative.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
 - Separate Expo Router screens, native Android back-stack navigation, visible back controls, focus-based data refresh, safe-area padding, and accessible controls with at least 48-point touch targets.
@@ -45,7 +45,7 @@ npx.cmd expo install --check
 npx.cmd expo config --type public
 ```
 
-The automated tests cover route ID validation, tournament lifecycle redirects, and stale match-link protection, plus real in-memory SQLite through an adapter for the Expo SQLite API. They do not open the Android device database or simulate a native navigation stack. Database coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
+The automated tests cover route ID validation, tournament lifecycle redirects, stale match-link protection, and connected bracket geometry, plus real in-memory SQLite through an adapter for the Expo SQLite API. Bracket checks cover 2-128 players, several font-scale layouts, connector targets, bounds, round alignment, and preservation of input data. Connections are also checked against persisted winner advancement in the tournament simulations. Tests do not open the Android device database, render native views, or simulate a native navigation stack. Database coverage includes legacy migration and result preservation, write constraints, transaction rollback, setup configuration editing and locks, player editing, manual assignment swaps and persisted pairings/BYE recipients, tied standings, pairing checks for 2-128 players, score validation, and 186 complete tournament simulations.
 
 To check Android JavaScript bundling and Hermes compilation:
 
@@ -74,7 +74,7 @@ Before treating a release as ready:
 
 1. Create Pool and Snooker events using both formats and each match length. Open Edit Tournament before starting, change all settings, and confirm registered players remain unchanged. Test Cancel and hardware Back without saving, then reopen the form to verify the saved values. Confirm the draw and score target follow the updated settings; active and completed events must not offer editing.
 2. Add, rename, and remove players; confirm blank and duplicate names are rejected. Cancel an edit, navigate away and back, and check that no draft name is saved. Confirm player IDs and ordering remain unchanged after renaming.
-3. Create 5- and 6-player knockout events. In Manual mode, choose players in each match and BYE slot, check that assignments swap without duplicates, confirm the draw, and play through the final. Confirm that canceling the start dialog leaves the draft editable and that going back to Players discards the draft without starting the event.
+3. Create 5- and 6-player knockout events. In Manual mode, choose players in each match and BYE slot, check that assignments swap without duplicates, confirm the draw, and play through the final. Confirm that canceling the start dialog leaves the draft editable and that going back to Players discards the draft without starting the event. In Connected Bracket, swipe sideways and scroll down to follow rounds, tap a ready match to score it, and verify the winner appears in the connected destination. Check BYEs, a two-player final, larger brackets, larger text, and the Round List alternative.
 4. Complete an odd-player round robin and a scenario with tied leaders. Select first-round opponents and the resting player; verify everyone still meets once over the complete schedule. Switching from Manual to Random reshuffles the draft; review it before starting.
 5. Try invalid scores, confirm valid results, and check advancement and completion.
 6. Close and reopen the app; verify tournament data and scores remain available.
@@ -117,6 +117,8 @@ src/
   navigation.ts              Route ID validation and lifecycle guards
   components/TournamentRoute.tsx  Shared focus-based data loading and route recovery
   components/MatchCard.tsx    Accessible reusable match summary
+  components/KnockoutBracket.tsx  Scrollable connected knockout diagram
+  bracket.ts                 Pure bracket layout and connector geometry
   screens/TournamentApp.tsx   Home and tournament history
   screens/TournamentDetailScreen.tsx   Details, rounds, and standings
   screens/MatchScoreScreen.tsx         Responsive score controls
@@ -128,6 +130,7 @@ src/
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
 tests/
+  bracket.cjs                 Bracket geometry and font-scale layout checks
   navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
 app.json                      Android-only Expo configuration
@@ -147,7 +150,7 @@ Legacy knockout draws with empty first-round matches are flagged, but their draw
 - Tournament name, game, format, and match length can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; valid legacy match lengths remain available when editing.
 - Confirmed scores cannot be edited or undone.
 - Standings use alphabetical ordering only to display otherwise tied rows; ties require a manual resolution outside the application.
-- Knockout brackets use round lists rather than connected diagrams.
+- Knockout events offer Connected Bracket and Round List views. The diagram shows saved pairings, BYEs, scores, and winners; it does not change tournament data. Names may be shortened visually inside diagram cards, but screen-reader labels include full names, and Round List remains available. Invalid stored match positions fall back to a message directing the organizer to Round List.
 - Each view has an Expo Router route. Tournament data refreshes when a route gains focus, and invalid/deleted tournament links have recovery actions. Locked setup pages and unavailable score links redirect to valid routes. Navigation history and unsaved form drafts are not persisted across application restarts.
 - Device persistence, accessibility, and fully offline APK operation still require Android acceptance testing.
 

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import type { TournamentData } from '../components/TournamentRoute';
 import MatchCard from '../components/MatchCard';
+import KnockoutBracket from '../components/KnockoutBracket';
 import type { Match } from '../engine';
-import { Btn, C, Card, Page, styles } from '../ui';
+import { Btn, C, Card, Choice, Page, styles } from '../ui';
 
 type Props = TournamentData & {
   onEdit: () => void;
@@ -28,6 +29,7 @@ export default function TournamentDetailScreen({
   onDelete,
   onHome,
 }: Props) {
+  const [view, setView] = useState<'bracket' | 'rounds'>('bracket');
   return (
     <Page
       title={tournament.name}
@@ -79,21 +81,39 @@ export default function TournamentDetailScreen({
             </>
           ) : null}
           <Text style={styles.label}>MATCHES / ROUNDS</Text>
-          {[...new Set(matches.map((match) => match.round))].map((round) => (
-            <View key={round}>
-              <Text style={[styles.label, { color: C.green }]}>ROUND {round}</Text>
-              {matches
-                .filter((match) => match.round === round)
-                .map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    players={players}
-                    onPress={tournament.status === 'active' ? () => onScore(match) : undefined}
-                  />
-                ))}
-            </View>
-          ))}
+          {tournament.format === 'knockout' ? (
+            <Choice
+              value={view}
+              onChange={setView}
+              options={[
+                { label: 'Connected Bracket', value: 'bracket' },
+                { label: 'Round List', value: 'rounds' },
+              ]}
+            />
+          ) : null}
+          {tournament.format === 'knockout' && view === 'bracket' ? (
+            <KnockoutBracket
+              matches={matches}
+              players={players}
+              onScore={tournament.status === 'active' ? onScore : undefined}
+            />
+          ) : (
+            [...new Set(matches.map((match) => match.round))].map((round) => (
+              <View key={round}>
+                <Text style={[styles.label, { color: C.green }]}>ROUND {round}</Text>
+                {matches
+                  .filter((match) => match.round === round)
+                  .map((match) => (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      players={players}
+                      onPress={tournament.status === 'active' ? () => onScore(match) : undefined}
+                    />
+                  ))}
+              </View>
+            ))
+          )}
         </>
       )}
       <Btn title="All Tournaments" secondary onPress={onHome} />
