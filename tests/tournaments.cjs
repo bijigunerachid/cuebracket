@@ -64,6 +64,54 @@ assert.equal(store.participants(orderingId).length,3);
 store.deleteTournament(orderingId);
 assert.equal(store.allPlayers().length,0);
 
+const editId=store.createTournament('Player editing','8ball','knockout',3);
+for(const name of ['Alice','Bob'])store.addPlayer(editId,name);
+const originalPlayers=store.participants(editId);
+const alice=originalPlayers[0].id,bob=originalPlayers[1].id;
+const originalPositions=sql.prepare('SELECT player_id,position FROM tournament_players WHERE tournament_id=? ORDER BY position').all(editId);
+store.renamePlayer(editId,alice,'  Alicia  ');
+assert.deepEqual(store.participants(editId).map(p=>[p.id,p.name]),[[alice,'Alicia'],[bob,'Bob']]);
+assert.deepEqual(sql.prepare('SELECT player_id,position FROM tournament_players WHERE tournament_id=? ORDER BY position').all(editId),originalPositions);
+store.init();
+assert.equal(store.participants(editId)[0].name,'Alicia');
+store.renamePlayer(editId,alice,'ALICIA');
+for(const name of ['', '   ', ' bob ', 'BOB'])assert.throws(()=>store.renamePlayer(editId,alice,name));
+assert.equal(store.participants(editId)[0].name,'ALICIA');
+assert.throws(()=>store.renamePlayer(editId,999999,'Unknown'),/not registered/);
+assert.throws(()=>store.renamePlayer(999999,alice,'Wrong event'),/not found/);
+const otherId=store.createTournament('Other event','snooker','knockout',3);
+store.addPlayer(otherId,'Other');
+const other=store.participants(otherId)[0];
+assert.throws(()=>store.renamePlayer(editId,other.id,'Wrong player'),/not registered/);
+assert.equal(store.participants(otherId)[0].name,'Other');
+// Protect shared legacy profiles from changing another tournament's names.
+sql.prepare('INSERT INTO tournament_players VALUES(?,?,?)').run(otherId,alice,1);
+assert.throws(()=>store.renamePlayer(editId,alice,'Shared edit'),/cannot be renamed/);
+assert.equal(store.participants(editId)[0].name,'ALICIA');
+sql.prepare('DELETE FROM tournament_players WHERE tournament_id=? AND player_id=?').run(otherId,alice);
+const runBeforeRename=adapter.runSync;
+adapter.runSync=(query,...params)=>{
+  const result=runBeforeRename(query,...params);
+  if(query.startsWith('UPDATE players SET name='))throw Error('Simulated rename failure');
+  return result;
+};
+assert.throws(()=>store.renamePlayer(editId,alice,'Rolled back'),/Simulated rename failure/);
+adapter.runSync=runBeforeRename;
+assert.equal(store.participants(editId)[0].name,'ALICIA');
+store.startTournament(editId,[alice,bob]);
+const drawBeforeEdit=store.matches(editId);
+assert.throws(()=>store.renamePlayer(editId,alice,'Active edit'),/already started/);
+assert.deepEqual(store.matches(editId),drawBeforeEdit);
+store.saveResult(editId,drawBeforeEdit[0].id,2,0);
+const resultsBeforeEdit=store.matches(editId);
+assert.throws(()=>store.renamePlayer(editId,alice,'History edit'),/already started/);
+assert.deepEqual(store.matches(editId),resultsBeforeEdit);
+assert.equal(store.participants(editId)[0].name,'ALICIA');
+store.removePlayer(otherId,other.id);
+assert.throws(()=>store.renamePlayer(otherId,other.id,'Removed'),/not registered/);
+store.deleteTournament(otherId);
+store.deleteTournament(editId);
+
 const tied=[{wins:2,diff:3},{wins:2,diff:3},{wins:2,diff:1}];
 assert.equal(engine.tiedLeaders(tied).length,2);
 assert.equal(engine.tiedLeaders(tied.slice(1)).length,1);
@@ -143,4 +191,4 @@ for (const best of [3,5,7,9]) {
   }
 }
 sql.close();
-console.log('Passed migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.');
+console.log('Passed player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.');
