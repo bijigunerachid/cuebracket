@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import type { Match, Player, Tournament } from '../engine';
-import { validateScore, winsNeeded } from '../engine';
+import { ruleForMatch, scoringTarget, scoringLabel, validateTargetScore } from '../rules';
 import { Btn, C, Card, Page, styles } from '../ui';
 
 export default function MatchScoreScreen({
@@ -19,11 +19,12 @@ export default function MatchScoreScreen({
 }) {
   const [first, setFirst] = useState(0);
   const [second, setSecond] = useState(0);
-  const target = winsNeeded(tournament.best_of);
+  const rule = ruleForMatch(tournament, match);
+  const target = match.target ?? scoringTarget(rule);
   return (
     <Page
       title="Match Score"
-      subtitle={`Round ${match.round} · Best of ${tournament.best_of} · First to ${target}`}
+      subtitle={`Round ${match.round} - ${scoringLabel(rule, tournament.first_to_label)}`}
       onBack={onCancel}
     >
       <Card>
@@ -66,7 +67,7 @@ export default function MatchScoreScreen({
       </Text>
       <Btn
         title="Confirm Result"
-        disabled={!validateScore(first, second, tournament.best_of)}
+        disabled={!validateTargetScore(first, second, target)}
         onPress={() => onSave(first, second)}
       />
       <Btn title="Cancel" secondary onPress={onCancel} />

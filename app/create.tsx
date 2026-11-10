@@ -12,6 +12,7 @@ export default function CreateRoute() {
           settings.game,
           settings.format,
           settings.bestOf,
+          settings.scoring,
         );
         router.replace(`/tournament/${id}/players`);
       }}

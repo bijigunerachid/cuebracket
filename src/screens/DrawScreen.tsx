@@ -2,24 +2,45 @@ import React, { useState } from 'react';
 import { Text } from 'react-native';
 import {
   Format,
+  Tournament,
   Player,
   assignDrawPlayer,
   knockoutPairs,
   roundRobinPairs,
   shuffle,
 } from '../engine';
+import {
+  randomKnockoutDraw,
+  knockoutSummary,
+  ruleForRound,
+  scoringLabel,
+  roundStage,
+  stageNames,
+} from '../rules';
 import { Btn, Card, Choice, Page, styles } from '../ui';
 
 type Props = {
   tournamentName: string;
+  tournament?: Tournament;
   format: Format;
   players: Player[];
   onStart: (order: number[]) => void;
   onBack: () => void;
 };
 
-export default function DrawScreen({ tournamentName, format, players, onStart, onBack }: Props) {
-  const [order, setOrder] = useState(() => shuffle(players.map((player) => player.id)));
+export default function DrawScreen({
+  tournamentName,
+  tournament,
+  format,
+  players,
+  onStart,
+  onBack,
+}: Props) {
+  const [order, setOrder] = useState(() =>
+    format === 'knockout'
+      ? randomKnockoutDraw(players.map((player) => player.id)).order
+      : shuffle(players.map((player) => player.id)),
+  );
   const [mode, setMode] = useState<'random' | 'manual'>('random');
   const [editingPosition, setEditingPosition] = useState<number | null>(null);
   const names = new Map(players.map((player) => [player.id, player.name]));
@@ -34,6 +55,10 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
       : roundRobinPairs(order)
     : [];
   const firstRound = pairs.filter((match) => match.round === 1);
+  const summary = ready && format === 'knockout' ? knockoutSummary(order.length) : null;
+  const byeRecipients = firstRound
+    .filter((match) => match.p1 === null || match.p2 === null)
+    .map((match) => match.p1 ?? match.p2!);
   const playing = new Set(firstRound.flatMap((match) => [match.p1, match.p2]));
   const resting = format === 'round_robin' ? order.filter((id) => !playing.has(id)) : [];
 
@@ -89,7 +114,10 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
           { label: 'Manual', value: 'manual' },
         ]}
         onChange={(value) => {
-          if (value === 'random' && mode !== 'random') setOrder((current) => shuffle(current));
+          if (value === 'random' && mode !== 'random')
+            setOrder((current) =>
+              format === 'knockout' ? randomKnockoutDraw(current).order : shuffle(current),
+            );
           setMode(value);
           setEditingPosition(null);
         }}
@@ -109,7 +137,9 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
           secondary
           disabled={!ready}
           onPress={() => {
-            setOrder((current) => shuffle(current));
+            setOrder((current) =>
+              format === 'knockout' ? randomKnockoutDraw(current).order : shuffle(current),
+            );
             setEditingPosition(null);
           }}
         />
@@ -121,7 +151,38 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
           </Text>
         </Card>
       ) : null}
-      <Text style={styles.label}>FIRST ROUND</Text>
+      {summary ? (
+        <Card>
+          <Text style={styles.text}>
+            {summary.players} players - {summary.matches} matches to play - {summary.byes} BYEs
+          </Text>
+          <Text style={styles.muted}>
+            {summary.advancing} players remain after this round: {summary.matches} match winners
+            plus {summary.byes} automatic BYE advances.
+          </Text>
+          <Text style={styles.muted}>
+            BYE recipients:{' '}
+            {byeRecipients.length ? byeRecipients.map((id) => names.get(id)).join(', ') : 'None'}
+          </Text>
+        </Card>
+      ) : null}
+      {summary && tournament ? (
+        <Card>
+          <Text style={styles.label}>SCORING BY ROUND</Text>
+          {Array.from({ length: summary.rounds }, (_, index) => index + 1).map((round) => (
+            <Text key={round} style={styles.muted}>
+              Round {round} ({stageNames[roundStage(round, summary.rounds, players.length)]}):{' '}
+              {scoringLabel(
+                ruleForRound(tournament, round, summary.rounds, players.length),
+                tournament.first_to_label,
+              )}
+            </Text>
+          ))}
+        </Card>
+      ) : null}
+      <Text style={styles.label}>
+        {summary?.byes ? 'PRELIMINARY MATCHES AND BYEs' : 'OPENING ROUND'}
+      </Text>
       {firstRound.map((match) => (
         <Card key={match.slot}>
           <Text style={styles.label}>MATCH {match.slot + 1}</Text>
@@ -143,7 +204,9 @@ export default function DrawScreen({ tournamentName, format, players, onStart, o
       ))}
       <Text style={styles.muted}>
         {format === 'knockout'
-          ? 'BYEs are required to fill the bracket. Choose their recipients above in Manual mode.'
+          ? summary?.byes
+            ? 'BYE recipients advance automatically without entering a score. Choose recipients in Manual mode, or reshuffle in Random mode.'
+            : 'No BYEs are needed. Each opening-round winner advances.'
           : `Single round robin: ${(players.length * (players.length - 1)) / 2} matches. Selecting opponents changes the schedule order, not who participates.`}
       </Text>
       <Btn

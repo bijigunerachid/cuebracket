@@ -4,6 +4,7 @@ import type { TournamentData } from '../components/TournamentRoute';
 import MatchCard from '../components/MatchCard';
 import KnockoutBracket from '../components/KnockoutBracket';
 import type { Match } from '../engine';
+import { baseScoringRule, scoringLabel } from '../rules';
 import { Btn, C, Card, Choice, Page, styles } from '../ui';
 
 type Props = TournamentData & {
@@ -33,7 +34,7 @@ export default function TournamentDetailScreen({
   return (
     <Page
       title={tournament.name}
-      subtitle={`${tournament.game === '8ball' ? '8-Ball Pool' : 'Snooker'} · ${tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} · Best of ${tournament.best_of}`}
+      subtitle={`${tournament.game === '8ball' ? '8-Ball Pool' : 'Snooker'} · ${tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} · ${scoringLabel(baseScoringRule(tournament), tournament.first_to_label)}`}
       onBack={onHome}
     >
       <View style={[styles.row, { flexWrap: 'wrap' }]}>

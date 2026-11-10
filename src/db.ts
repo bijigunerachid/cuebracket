@@ -8,9 +8,17 @@ import {
   knockoutPairs,
   roundRobinPairs,
   shuffle,
-  validateScore,
   validateSettings,
+  ScoringOptions,
 } from './engine';
+import { migrateScoring } from './migrations';
+import {
+  scoringOptions,
+  validateScoringOptions,
+  ruleForRound,
+  scoringTarget,
+  validateTargetScore,
+} from './rules';
 let db: SQLite.SQLiteDatabase;
 export function init() {
   db ??= SQLite.openDatabaseSync('cuebracket.db');
@@ -35,16 +43,26 @@ export const participants = (id: number) =>
   );
 export const matches = (id: number) =>
   db.getAllSync<Match>('SELECT * FROM matches WHERE tournament_id=? ORDER BY round,slot', id);
-export function createTournament(name: string, game: Game, format: Format, bestOf: number) {
+export function createTournament(
+  name: string,
+  game: Game,
+  format: Format,
+  bestOf: number,
+  scoring: ScoringOptions = { mode: 'best_of', label: 'First to', rounds: {} },
+) {
   if (!name.trim()) throw Error('Tournament name is required');
   validateSettings(game, format, bestOf);
+  validateScoringOptions(scoring);
   return Number(
     db.runSync(
-      'INSERT INTO tournaments(name,game,format,best_of) VALUES(?,?,?,?)',
+      'INSERT INTO tournaments(name,game,format,best_of,scoring_mode,first_to_label,round_rules) VALUES(?,?,?,?,?,?,?)',
       name.trim(),
       game,
       format,
       bestOf,
+      scoring.mode,
+      scoring.label.trim(),
+      JSON.stringify(scoring.rounds),
     ).lastInsertRowId,
   );
 }
@@ -71,6 +89,7 @@ export function updateTournament(
   game: Game,
   format: Format,
   bestOf: number,
+  scoring?: ScoringOptions,
 ) {
   const trimmed = name.trim();
   if (!trimmed) throw Error('Tournament name is required');
@@ -79,6 +98,8 @@ export function updateTournament(
     const current = tournament(id);
     if (!current) throw Error('Tournament not found');
     if (current.status !== 'setup') throw Error('Tournament settings are locked after starting');
+    const options = scoring ?? scoringOptions(current);
+    validateScoringOptions(options);
     const existingDraw = db.getFirstSync<{ n: number }>(
       'SELECT COUNT(*) n FROM matches WHERE tournament_id=?',
       id,
@@ -86,11 +107,14 @@ export function updateTournament(
     if (existingDraw?.n)
       throw Error('Tournament settings are locked because a draw already exists');
     db.runSync(
-      'UPDATE tournaments SET name=?,game=?,format=?,best_of=? WHERE id=?',
+      'UPDATE tournaments SET name=?,game=?,format=?,best_of=?,scoring_mode=?,first_to_label=?,round_rules=? WHERE id=?',
       trimmed,
       game,
       format,
       bestOf,
+      options.mode,
+      options.label.trim(),
+      JSON.stringify(options.rounds),
       id,
     );
   });
@@ -150,31 +174,43 @@ export function startTournament(id: number, orderedIds: number[]) {
   )
     throw Error('Draw must contain each player exactly once');
   const pairs = t.format === 'knockout' ? knockoutPairs(orderedIds) : roundRobinPairs(orderedIds);
+  const totalRounds = Math.log2(2 ** Math.ceil(Math.log2(registered.length)));
+  const rule = (round: number) => ruleForRound(t, round, totalRounds, registered.length);
   db.withTransactionSync(() => {
-    for (const m of pairs)
+    for (const m of pairs) {
+      const scoring = rule(m.round);
       db.runSync(
-        'INSERT INTO matches(tournament_id,round,slot,p1,p2,status) VALUES(?,?,?,?,?,?)',
+        'INSERT INTO matches(tournament_id,round,slot,p1,p2,status,target,scoring_mode,scoring_value) VALUES(?,?,?,?,?,?,?,?,?)',
         id,
         m.round,
         m.slot,
         m.p1,
         m.p2,
         'pending',
+        scoringTarget(scoring),
+        scoring.mode,
+        scoring.value,
       );
+    }
     if (t.format === 'knockout') {
       const size = 2 ** Math.ceil(Math.log2(registered.length));
       let count = size / 2,
         round = 2;
       while (count > 1) {
         count /= 2;
-        for (let slot = 0; slot < count; slot++)
+        for (let slot = 0; slot < count; slot++) {
+          const scoring = rule(round);
           db.runSync(
-            'INSERT INTO matches(tournament_id,round,slot,status) VALUES(?,?,?,?)',
+            'INSERT INTO matches(tournament_id,round,slot,status,target,scoring_mode,scoring_value) VALUES(?,?,?,?,?,?,?)',
             id,
             round,
             slot,
             'pending',
+            scoringTarget(scoring),
+            scoring.mode,
+            scoring.value,
           );
+        }
         round++;
       }
       // Auto-advance initial BYEs.
@@ -223,8 +259,9 @@ export function saveResult(tid: number, mid: number, s1: number, s2: number) {
   );
   if (!t || !m || t.status !== 'active' || m.status !== 'pending' || m.p1 === null || m.p2 === null)
     throw Error('This match is not ready');
-  if (!validateScore(s1, s2, t.best_of))
-    throw Error(`Winner must reach ${Math.floor(t.best_of / 2) + 1}; loser must have fewer`);
+  const target = m.target ?? Math.floor(t.best_of / 2) + 1;
+  if (!validateTargetScore(s1, s2, target))
+    throw Error(`Winner must reach ${target}; loser must have fewer`);
   const winner = s1 > s2 ? m.p1 : m.p2;
   db.withTransactionSync(() => {
     db.runSync('UPDATE matches SET s1=?,s2=? WHERE id=?', s1, s2, mid);
@@ -266,43 +303,44 @@ function cleanupPlayers() {
 // Triggers add write constraints without rebuilding tables or discarding legacy results.
 function migrate() {
   const version = db.getFirstSync<{ user_version: number }>('PRAGMA user_version')!.user_version;
-  if (version > 1) throw Error('This database was created by a newer version of CueBracket');
-  if (version === 1) return;
-  db.withTransactionSync(() => {
-    for (const t of tournaments()) {
-      const ids = participants(t.id).map((p) => p.id);
-      ids.forEach((pid, position) =>
-        db.runSync(
-          'UPDATE tournament_players SET position=? WHERE tournament_id=? AND player_id=?',
-          position,
-          t.id,
-          pid,
-        ),
+  if (version > 2) throw Error('This database was created by a newer version of CueBracket');
+  if (version === 2) return;
+  if (version === 0)
+    db.withTransactionSync(() => {
+      for (const t of tournaments()) {
+        const ids = participants(t.id).map((p) => p.id);
+        ids.forEach((pid, position) =>
+          db.runSync(
+            'UPDATE tournament_players SET position=? WHERE tournament_id=? AND player_id=?',
+            position,
+            t.id,
+            pid,
+          ),
+        );
+      }
+      db.execSync(
+        'CREATE UNIQUE INDEX IF NOT EXISTS participant_position ON tournament_players(tournament_id,position)',
       );
-    }
-    db.execSync(
-      'CREATE UNIQUE INDEX IF NOT EXISTS participant_position ON tournament_players(tournament_id,position)',
-    );
-    const rules: { table: string; condition: string; message: string }[] = [
-      {
-        table: 'tournaments',
-        condition:
-          "length(trim(NEW.name))=0 OR NEW.game NOT IN ('8ball','snooker') OR NEW.format NOT IN ('knockout','round_robin') OR typeof(NEW.best_of)!='integer' OR NEW.best_of<1 OR NEW.best_of%2=0 OR NEW.status NOT IN ('setup','active','complete')",
-        message: 'Invalid tournament settings',
-      },
-      {
-        table: 'players',
-        condition: 'length(trim(NEW.name))=0',
-        message: 'Player name is required',
-      },
-      {
-        table: 'tournament_players',
-        condition: "typeof(NEW.position)!='integer' OR NEW.position<0",
-        message: 'Invalid participant position',
-      },
-      {
-        table: 'matches',
-        condition: `typeof(NEW.round)!='integer' OR NEW.round<1 OR typeof(NEW.slot)!='integer' OR NEW.slot<0
+      const rules: { table: string; condition: string; message: string }[] = [
+        {
+          table: 'tournaments',
+          condition:
+            "length(trim(NEW.name))=0 OR NEW.game NOT IN ('8ball','snooker') OR NEW.format NOT IN ('knockout','round_robin') OR typeof(NEW.best_of)!='integer' OR NEW.best_of<1 OR NEW.best_of%2=0 OR NEW.status NOT IN ('setup','active','complete')",
+          message: 'Invalid tournament settings',
+        },
+        {
+          table: 'players',
+          condition: 'length(trim(NEW.name))=0',
+          message: 'Player name is required',
+        },
+        {
+          table: 'tournament_players',
+          condition: "typeof(NEW.position)!='integer' OR NEW.position<0",
+          message: 'Invalid participant position',
+        },
+        {
+          table: 'matches',
+          condition: `typeof(NEW.round)!='integer' OR NEW.round<1 OR typeof(NEW.slot)!='integer' OR NEW.slot<0
     OR NEW.status NOT IN ('pending','done','bye')
     OR (NEW.p1 IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tournament_players WHERE tournament_id=NEW.tournament_id AND player_id=NEW.p1))
     OR (NEW.p2 IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tournament_players WHERE tournament_id=NEW.tournament_id AND player_id=NEW.p2))
@@ -314,14 +352,15 @@ function migrate() {
       OR typeof(NEW.s1)!='integer' OR typeof(NEW.s2)!='integer' OR NEW.s1<0 OR NEW.s2<0
       OR max(NEW.s1,NEW.s2)!=(SELECT best_of/2+1 FROM tournaments WHERE id=NEW.tournament_id)
       OR NEW.s1=NEW.s2 OR NEW.winner IS NOT CASE WHEN NEW.s1>NEW.s2 THEN NEW.p1 ELSE NEW.p2 END))`,
-        message: 'Invalid match data',
-      },
-    ];
-    for (const rule of rules)
-      for (const operation of ['INSERT', 'UPDATE'])
-        db.execSync(
-          `CREATE TRIGGER IF NOT EXISTS validate_${rule.table}_${operation.toLowerCase()} BEFORE ${operation} ON ${rule.table} WHEN ${rule.condition} BEGIN SELECT RAISE(ABORT,'${rule.message}'); END;`,
-        );
-    db.execSync('PRAGMA user_version=1');
-  });
+          message: 'Invalid match data',
+        },
+      ];
+      for (const rule of rules)
+        for (const operation of ['INSERT', 'UPDATE'])
+          db.execSync(
+            `CREATE TRIGGER IF NOT EXISTS validate_${rule.table}_${operation.toLowerCase()} BEFORE ${operation} ON ${rule.table} WHEN ${rule.condition} BEGIN SELECT RAISE(ABORT,'${rule.message}'); END;`,
+          );
+      db.execSync('PRAGMA user_version=1');
+    });
+  migrateScoring(db);
 }

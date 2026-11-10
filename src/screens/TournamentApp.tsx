@@ -3,6 +3,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as store from '../db';
 import type { Tournament } from '../engine';
+import { baseScoringRule, scoringLabel } from '../rules';
 import { tournamentPath } from '../navigation';
 import { Btn, C, Card, Page, styles } from '../ui';
 
@@ -55,8 +56,8 @@ export default function TournamentApp() {
             </View>
             <Text style={[styles.muted, { marginTop: 8 }]}>
               {tournament.game === '8ball' ? '8-Ball Pool' : 'Snooker'} ·{' '}
-              {tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} · Best of{' '}
-              {tournament.best_of}
+              {tournament.format === 'knockout' ? 'Knockout' : 'Round robin'} ·{' '}
+              {scoringLabel(baseScoringRule(tournament), tournament.first_to_label)}
             </Text>
           </TouchableOpacity>
         ))

@@ -13,6 +13,7 @@ export default function DrawRoute() {
       {({ tournament, players }) => (
         <DrawScreen
           tournamentName={tournament.name}
+          tournament={tournament}
           format={tournament.format}
           players={players}
           onBack={() => router.dismissTo(`${tournamentPath(tournament.id)}/players`)}

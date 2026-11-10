@@ -12,6 +12,8 @@ function load(file, requireModule = require) {
   return module.exports;
 }
 const engine = load('src/engine.ts');
+const rules = load('src/rules.ts', (name) => (name === './engine' ? engine : require(name)));
+const migrations = load('src/migrations.ts');
 const bracket = load('src/bracket.ts');
 const sql = new DatabaseSync(':memory:');
 const adapter = {
@@ -38,7 +40,11 @@ const store = load('src/db.ts', (name) =>
     ? { openDatabaseSync: () => adapter }
     : name === './engine'
       ? engine
-      : require(name),
+      : name === './rules'
+        ? rules
+        : name === './migrations'
+          ? migrations
+          : require(name),
 );
 // Simulate the unversioned schema already installed on an organizer's device.
 const schema = fs.readFileSync('src/db.ts', 'utf8').match(/db\.execSync\(`([\s\S]*?)`\)/)[1];
@@ -47,7 +53,45 @@ sql.exec(`INSERT INTO tournaments(id,name,game,format,best_of,status) VALUES(1,'
  INSERT INTO players(id,name) VALUES(1,'A'),(2,'B');
  INSERT INTO tournament_players VALUES(1,1,2),(1,2,2);
  INSERT INTO matches(tournament_id,round,slot,p1,p2,s1,s2,winner,status) VALUES(1,1,0,1,2,3,1,1,'done');`);
+const originalExec = adapter.execSync;
+adapter.execSync = (query) => {
+  originalExec(query);
+  if (query.includes('ALTER TABLE tournaments ADD COLUMN scoring_mode'))
+    throw Error('Simulated migration failure');
+};
+assert.throws(() => store.init(), /Simulated migration failure/);
+adapter.execSync = originalExec;
+assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 1);
+assert.ok(
+  !sql
+    .prepare('PRAGMA table_info(tournaments)')
+    .all()
+    .some((column) => column.name === 'scoring_mode'),
+);
+assert.equal(sql.prepare('SELECT s1 FROM matches').get().s1, 3);
+// Retry from a genuine version-1 schema and fail while rebuilding the last trigger.
+adapter.execSync = (query) => {
+  originalExec(query);
+  if (
+    query.includes('CREATE TRIGGER') &&
+    query.includes('validate_matches_update') &&
+    query.includes('NEW.target')
+  )
+    throw Error('Simulated trigger migration failure');
+};
+assert.throws(() => store.init(), /Simulated trigger migration failure/);
+adapter.execSync = originalExec;
+assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 1);
+assert.ok(
+  !sql
+    .prepare('PRAGMA table_info(matches)')
+    .all()
+    .some((column) => column.name === 'target'),
+);
 store.init();
+assert.equal(store.matches(1)[0].target, 3);
+assert.equal(store.matches(1)[0].scoring_mode, 'best_of');
+assert.equal(store.matches(1)[0].scoring_value, 5);
 assert.deepEqual(
   sql
     .prepare('SELECT position FROM tournament_players ORDER BY player_id')
@@ -58,7 +102,7 @@ assert.deepEqual(
 assert.equal(store.matches(1)[0].winner, 1);
 store.init();
 assert.equal(store.matches(1)[0].s1, 3);
-assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 1);
+assert.equal(sql.prepare('PRAGMA user_version').get().user_version, 2);
 assert.throws(() => sql.prepare('UPDATE matches SET winner=999 WHERE tournament_id=1').run());
 assert.equal(store.matches(1)[0].winner, 1);
 store.deleteTournament(1);
@@ -442,7 +486,129 @@ for (const best of [3, 5, 7, 9]) {
       );
     }
 }
+// Real persisted draws and round-specific scoring for every knockout size 2–128.
+const stageRules = {
+  preliminary: { mode: 'first_to', value: 2 },
+  quarterfinal: { mode: 'best_of', value: 5 },
+  semifinal: { mode: 'first_to', value: 4 },
+  final: { mode: 'best_of', value: 11 },
+};
+for (let count = 2; count <= 128; count++) {
+  const tid = store.createTournament(`Rules ${count}`, '8ball', 'knockout', 7, {
+    mode: 'first_to',
+    label: 'A',
+    rounds: stageRules,
+  });
+  for (let i = 0; i < count; i++) store.addPlayer(tid, `P${i}`);
+  const ids = store.participants(tid).map((player) => player.id);
+  const preview = rules.randomKnockoutDraw(ids);
+  store.startTournament(tid, preview.order);
+  const opening = store.matches(tid).filter((match) => match.round === 1);
+  assert.deepEqual(
+    opening.map((match) => [match.p1, match.p2]),
+    preview.pairs.map((match) => [match.p1, match.p2]),
+  );
+  assert.equal(opening.filter((match) => match.status === 'bye').length, preview.summary.byes);
+  for (const match of opening.filter((match) => match.status === 'bye')) {
+    assert.equal(match.s1, null);
+    assert.equal(match.s2, null);
+    assert.equal(match.winner, match.p1 ?? match.p2);
+    assert.throws(() => store.saveResult(tid, match.id, match.target, 0));
+  }
+  let played = 0;
+  while (true) {
+    const match = store
+      .matches(tid)
+      .find((row) => row.status === 'pending' && row.p1 !== null && row.p2 !== null);
+    if (!match) break;
+    const expected = rules.ruleForRound(
+      store.tournament(tid),
+      match.round,
+      preview.summary.rounds,
+      count,
+    );
+    assert.equal(match.target, rules.scoringTarget(expected));
+    assert.equal(match.scoring_mode, expected.mode);
+    assert.equal(match.scoring_value, expected.value);
+    assert.throws(() => store.saveResult(tid, match.id, match.target + 1, 0));
+    assert.throws(() => store.saveResult(tid, match.id, match.target, match.target));
+    const secondWins = played % 2 === 1;
+    store.saveResult(tid, match.id, secondWins ? 0 : match.target, secondWins ? match.target : 0);
+    played++;
+  }
+  assert.equal(played, count - 1);
+  assert.equal(store.tournament(tid).status, 'complete');
+  const all = store.matches(tid);
+  assert.ok(all.every((match) => match.status !== 'pending'));
+  const final = all.find((match) => match.round === preview.summary.rounds);
+  assert.ok(ids.includes(final.winner));
+  assert.equal(final.target, 6);
+  store.deleteTournament(tid);
+}
+const configuredRules = store.createTournament('Editable rules', 'snooker', 'knockout', 5);
+store.updateTournament(configuredRules, 'A5 event', '8ball', 'knockout', 9, {
+  mode: 'first_to',
+  label: 'A',
+  rounds: stageRules,
+});
+assert.equal(store.tournament(configuredRules).scoring_mode, 'first_to');
+assert.equal(store.tournament(configuredRules).first_to_label, 'A');
+assert.deepEqual(JSON.parse(store.tournament(configuredRules).round_rules), stageRules);
+const savedRules = store.tournament(configuredRules);
+assert.throws(() =>
+  store.updateTournament(configuredRules, 'Invalid', '8ball', 'knockout', 9, {
+    mode: 'first_to',
+    label: 'A',
+    rounds: { final: { mode: 'best_of', value: 4 } },
+  }),
+);
+assert.deepEqual(store.tournament(configuredRules), savedRules);
+store.init();
+assert.deepEqual(store.tournament(configuredRules), savedRules);
+store.deleteTournament(configuredRules);
+const rr = store.createTournament('First-to RR', 'snooker', 'round_robin', 9, {
+  mode: 'first_to',
+  label: 'A',
+  rounds: stageRules,
+});
+for (const name of ['A', 'B', 'C']) store.addPlayer(rr, name);
+store.startTournament(
+  rr,
+  store.participants(rr).map((player) => player.id),
+);
+assert.ok(
+  store.matches(rr).every((match) => match.target === 5 && match.scoring_mode === 'first_to'),
+);
+// Saved match targets stay authoritative even if external metadata is changed.
+sql.prepare('UPDATE tournaments SET best_of=3 WHERE id=?').run(rr);
+assert.ok(
+  store
+    .matches(rr)
+    .every(
+      (match) => match.target === 5 && rules.ruleForMatch(store.tournament(rr), match).value === 5,
+    ),
+);
+for (const match of store.matches(rr)) store.saveResult(rr, match.id, 5, 1);
+assert.equal(store.tournament(rr).status, 'complete');
+store.deleteTournament(rr);
+assert.throws(() =>
+  store.createTournament('Bad rules', '8ball', 'knockout', 5, {
+    mode: 'first_to',
+    label: 'A',
+    rounds: { final: { mode: 'best_of', value: 4 } },
+  }),
+);
+assert.throws(() =>
+  sql.exec(
+    "INSERT INTO tournaments(name,game,format,best_of,scoring_mode) VALUES('Bad','8ball','knockout',5,'invalid')",
+  ),
+);
+assert.throws(() =>
+  sql.exec(
+    "INSERT INTO tournaments(name,game,format,best_of,round_rules) VALUES('Bad','8ball','knockout',5,'[]')",
+  ),
+);
 sql.close();
 console.log(
-  'Passed tournament configuration and lock checks, manual assignment and persistence checks, player editing and rollback checks, migration preservation, constraints, ordering, ties, pairing checks for 2–128 players, 186 tournament simulations, and score validation.',
+  'Passed scoring migration rollback/retry, legacy preservation, 127 round-specific knockout simulations (2–128 players), First-to round robin, 186 existing tournament simulations, configuration locks, manual assignments, and score validation.',
 );

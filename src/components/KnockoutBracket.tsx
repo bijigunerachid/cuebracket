@@ -159,7 +159,7 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                   ))}
                   <Text style={styles.muted} numberOfLines={1}>
                     {ready
-                      ? 'Tap to score'
+                      ? `First to ${match.target ?? '?'} - tap to score`
                       : match.status === 'bye'
                         ? 'Advanced automatically'
                         : match.status === 'done'
