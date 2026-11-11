@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import TournamentRoute from '../../../src/components/TournamentRoute';
 import TournamentDetailScreen from '../../../src/screens/TournamentDetailScreen';
 import * as store from '../../../src/db';
-import { canScoreMatch, tournamentPath } from '../../../src/navigation';
+import { canCorrectMatch, canScoreMatch, tournamentPath } from '../../../src/navigation';
 import { errorAlert } from '../../../src/ui';
 
 export default function DetailRoute() {
@@ -20,7 +20,8 @@ export default function DetailRoute() {
             onDraw={() => router.push(`${path}/draw`)}
             onResults={() => router.push(`${path}/results`)}
             onScore={(match) => {
-              if (canScoreMatch(data.tournament, match)) router.push(`${path}/match/${match.id}`);
+              if (canScoreMatch(data.tournament, match) || canCorrectMatch(data.tournament, match))
+                router.push(`${path}/match/${match.id}`);
             }}
             onHome={() => router.dismissTo('/')}
             onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}

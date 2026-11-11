@@ -17,13 +17,18 @@ export default function MatchCard({
       ? 'Awaiting player'
       : (players.find((player) => player.id === id)?.name ?? 'Unknown');
   const ready = !!onPress && match.status === 'pending' && match.p1 !== null && match.p2 !== null;
+  const correcting = !!onPress && match.status === 'done';
+  const actionable = ready || correcting;
   const bye = match.status === 'bye';
   return (
     <TouchableOpacity
-      disabled={!ready}
+      disabled={!actionable}
       onPress={onPress}
-      accessibilityRole={ready ? 'button' : 'text'}
-      accessibilityState={{ disabled: !ready }}
+      accessibilityRole={actionable ? 'button' : 'text'}
+      accessibilityState={{ disabled: !actionable }}
+      accessibilityHint={
+        correcting ? 'Open to correct this result' : ready ? 'Open to record a result' : undefined
+      }
       accessibilityLabel={
         bye
           ? `${name(match.winner)}, BYE, advances without playing or a score`
@@ -86,9 +91,9 @@ export default function MatchCard({
         <Text style={[styles.muted, { flex: 1 }]}>
           {bye
             ? 'Advances automatically · No score'
-            : `${match.target != null ? `First to ${match.target}` : 'Awaiting opponents'}${ready ? ' · Enter result' : ''}`}
+            : `${match.target != null ? `First to ${match.target}` : 'Awaiting opponents'}${correcting ? ' · Correct result' : ready ? ' · Enter result' : ''}`}
         </Text>
-        {ready ? <AppIcon name="chevron-right" size={18} color={C.muted} /> : null}
+        {actionable ? <AppIcon name="chevron-right" size={18} color={C.muted} /> : null}
       </View>
     </TouchableOpacity>
   );
