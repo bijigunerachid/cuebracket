@@ -422,6 +422,81 @@ export function standings(tid: number) {
       (a, b) => b.wins - a.wins || b.diff - a.diff || a.player.name.localeCompare(b.player.name),
     );
 }
+type ResultSnapshot = Pick<Match, 'p1' | 'p2' | 's1' | 's2' | 'winner'>;
+
+export function correctResult(
+  tid: number,
+  mid: number,
+  s1: number,
+  s2: number,
+  expected: ResultSnapshot,
+) {
+  db.withTransactionSync(() => {
+    const t = tournament(tid);
+    const games = matches(tid);
+    const m = games.find((game) => game.id === mid);
+    if (
+      !t ||
+      !['active', 'complete'].includes(t.status) ||
+      !m ||
+      m.status !== 'done' ||
+      m.p1 === null ||
+      m.p2 === null
+    )
+      throw Error('Only confirmed played matches can be corrected');
+    if (
+      ['p1', 'p2', 's1', 's2', 'winner'].some(
+        (key) => m[key as keyof ResultSnapshot] !== expected[key as keyof ResultSnapshot],
+      )
+    )
+      throw Error('This result changed. Reopen the match before correcting it');
+    const target = m.target ?? Math.floor(t.best_of / 2) + 1;
+    if (!validateTargetScore(s1, s2, target))
+      throw Error(`Winner must reach ${target}; loser must have fewer`);
+    const winner = s1 > s2 ? m.p1 : m.p2;
+    if (winner !== m.winner && t.format !== 'round_robin') {
+      // Preserve generated pairings. Follow only this player's advancement, including dynamic BYEs.
+      let previous = m;
+      for (let round = m.round + 1; games.some((game) => game.round === round); round++) {
+        const candidates = games.filter(
+          (game) =>
+            game.round === round &&
+            (t.format === 'knockout'
+              ? game.slot === Math.floor(previous.slot / 2)
+              : game.p1 === m.winner || game.p2 === m.winner),
+        );
+        if (candidates.length !== 1)
+          throw Error('Cannot safely correct this tournament advancement');
+        const next = candidates[0];
+        const column =
+          t.format === 'knockout'
+            ? previous.slot % 2 === 0
+              ? 'p1'
+              : 'p2'
+            : next.p1 === m.winner
+              ? 'p1'
+              : 'p2';
+        if (next[column] !== m.winner)
+          throw Error('Cannot safely correct this tournament advancement');
+        if (next.status === 'done')
+          throw Error('Winner cannot change because an affected later match already has a result');
+        if (next.status === 'pending') {
+          if (next.s1 !== null || next.s2 !== null || next.winner !== null)
+            throw Error('Later match contains unexpected result data');
+          db.runSync(`UPDATE matches SET ${column}=? WHERE id=?`, winner, next.id);
+          break;
+        }
+        if (next.status !== 'bye' || next.winner !== m.winner)
+          throw Error('Cannot safely correct this tournament advancement');
+        db.runSync(`UPDATE matches SET ${column}=?,winner=? WHERE id=?`, winner, winner, next.id);
+        previous = next;
+      }
+    }
+    db.runSync('UPDATE matches SET s1=?,s2=?,winner=? WHERE id=?', s1, s2, winner, mid);
+    // Correcting a played match does not change the number of outstanding matches.
+    // Standings and champions are derived from these rows when routes regain focus.
+  });
+}
 export { shuffle };
 
 function cleanupPlayers() {

@@ -191,11 +191,7 @@ export default function TournamentDetailScreen({
             </>
           ) : null}
           {tournament.format === 'knockout' && view === 'bracket' ? (
-            <KnockoutBracket
-              matches={matches}
-              players={players}
-              onScore={tournament.status === 'active' ? onScore : undefined}
-            />
+            <KnockoutBracket matches={matches} players={players} onScore={onScore} />
           ) : view === 'rounds' ? (
             rounds
               .filter(
@@ -233,7 +229,7 @@ export default function TournamentDetailScreen({
                         key={match.id}
                         match={match}
                         players={players}
-                        onPress={tournament.status === 'active' ? () => onScore(match) : undefined}
+                        onPress={() => onScore(match)}
                       />
                     ))}
                 </View>

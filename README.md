@@ -62,6 +62,16 @@ Knockout organizers may override the default rule independently for preliminary 
 
 Draw preview lists opening matches, BYE recipients, matches to play, the number of players remaining afterward, and scoring by round. BYEs advance automatically with no score. New matches store their own scoring mode, value, and winning target when the draw is confirmed. Settings lock after starting, so every later score uses that saved match rule.
 
+## Correcting match results
+
+Open a tournament's **Matches** view and tap a played match marked **Correct result**, or tap a played match in the standard knockout bracket. The saved scores are prefilled. Adjust them, choose **Review correction**, and confirm. To reach an earlier match, choose its round or **All rounds**. Cancel or Back leaves the saved result unchanged.
+
+The original match target still applies. A correction that keeps the winner can change the losing score even after later rounds are played. Round-robin winner changes update standings immediately, including completed events. A knockout winner change replaces that qualifier in the existing unplayed next match, preserving pairings and scoring rules. Dynamic Knockout also follows any automatic BYE advancement into later unplayed matches without reshuffling. If an affected later match already has a confirmed result, the winner change is rejected; existing later results are never erased. A completed final can be corrected and its champion updates while the event stays completed.
+
+BYEs and pending matches cannot use the correction operation. Stale corrections are rejected if the saved scores or opponents changed after opening the form. Every correction, including affected advancement, uses one SQLite transaction; errors roll back all changes. This feature replaces the current result and does not keep a separate edit history or offer undo. Database schema and backup format remain unchanged.
+
+Automated tests exercise both knockout formats for every count 2–128, protected descendants, score-only corrections, champions, round-robin standings, Dynamic Knockout BYE propagation, stale edits, invalid scores, rollback, restart persistence, and backup integrity. On Android, verify opening a played match from Matches and Bracket, prefilled scores, disabled unchanged-score submission, Cancel/Back, confirmation, readable errors for blocked winner changes, refreshed standings/champion, and persistence after closing/reopening the app.
+
 ## Backup and restore
 
 Open **Settings → Backup & restore → Export backup**, then choose a save or share destination in Android. Save the file outside CueBracket (for example in Downloads or on another device). Closing the share sheet does not confirm a saved copy. Files kept only in the app's cache are temporary and will not survive clearing app data or uninstalling. Backups contain player names and results in unencrypted JSON; choose the destination accordingly.
@@ -198,6 +208,7 @@ tests/
   bracket.cjs                 Bracket geometry and font-scale layout checks
   navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
+  corrections.cjs             Score correction, downstream protection, and restart checks
   backup.cjs                  Restore simulations, rollback, restart, and file API checks
 app.json                      Android-only Expo configuration
 eas.json                      APK and AAB build profiles
@@ -216,7 +227,7 @@ Legacy knockout draws with empty first-round matches are flagged, but their draw
 - Player changes are allowed only during setup. Reusable player selection is not implemented. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
 - Manual draw assigns players by swapping occupied first-round slots. The number and bracket positions of knockout BYEs are automatic; their recipients can be chosen. Round robin lets you choose first-round opponents and the resting player, with later rounds generated automatically so every pair meets once. Unconfirmed draw drafts are discarded when leaving the draw screen.
 - Tournament name, game, format, scoring mode, winning target, and optional round overrides can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; legacy match lengths are retained when editing.
-- Confirmed scores cannot be edited or undone.
+- Confirmed played scores support guarded corrections; affected played descendants block winner changes. Corrections replace the current result without edit history or undo.
 - Standings use alphabetical ordering only to display otherwise tied rows; ties require a manual resolution outside the application.
 - Knockout events offer Connected Bracket and Round List views. The diagram shows saved pairings, BYEs, scores, and winners; it does not change tournament data. Names may be shortened visually inside diagram cards, but screen-reader labels include full names, and Round List remains available. Invalid stored match positions fall back to a message directing the organizer to Round List.
 - Each view has an Expo Router route. Tournament data refreshes when a route gains focus, and invalid/deleted tournament links have recovery actions. Locked setup pages and unavailable score links redirect to valid routes. Navigation history and unsaved form drafts are not persisted across application restarts.

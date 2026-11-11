@@ -40,7 +40,7 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
   return (
     <>
       <Text style={[styles.muted, { marginVertical: 12 }]}>
-        Swipe for later rounds. Tap a ready match to enter its score.
+        Swipe for later rounds. Tap a ready match to score, or a played match to correct its result.
       </Text>
       <ScrollView
         horizontal
@@ -99,6 +99,8 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
               const match = node.match;
               const ready =
                 !!onScore && match.status === 'pending' && match.p1 !== null && match.p2 !== null;
+              const correcting = !!onScore && match.status === 'done';
+              const actionable = ready || correcting;
               const name = (id: number | null) =>
                 id === null
                   ? match.status === 'bye'
@@ -110,12 +112,13 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
               return (
                 <TouchableOpacity
                   key={match.id}
-                  disabled={!ready}
+                  disabled={!actionable}
                   onPress={() => onScore?.(match)}
                   accessible
-                  accessibilityRole={ready ? 'button' : 'text'}
+                  accessibilityRole={actionable ? 'button' : 'text'}
                   accessibilityLabel={label}
-                  accessibilityState={{ disabled: !ready }}
+                  accessibilityState={{ disabled: !actionable }}
+                  accessibilityHint={correcting ? 'Open to correct this result' : undefined}
                   style={[
                     styles.card,
                     {
@@ -181,7 +184,9 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                       : match.status === 'bye'
                         ? 'Advanced automatically'
                         : match.status === 'done'
-                          ? 'Final result'
+                          ? correcting
+                            ? 'Tap to correct result'
+                            : 'Final result'
                           : 'Waiting for opponents'}
                   </Text>
                 </TouchableOpacity>

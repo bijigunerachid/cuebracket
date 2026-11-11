@@ -18,8 +18,9 @@ export default function MatchScoreScreen({
   onSave: (first: number, second: number) => void;
   onCancel: () => void;
 }) {
-  const [first, setFirst] = useState(0);
-  const [second, setSecond] = useState(0);
+  const correcting = match.status === 'done';
+  const [first, setFirst] = useState(match.s1 ?? 0);
+  const [second, setSecond] = useState(match.s2 ?? 0);
   const [nameHeight, setNameHeight] = useState(0);
   const { width, fontScale } = useWindowDimensions();
   useEffect(() => setNameHeight(0), [width, fontScale]);
@@ -33,17 +34,23 @@ export default function MatchScoreScreen({
   const winner = players.find((player) => player.id === (first > second ? match.p1 : match.p2));
   return (
     <Page
-      title="Record result"
+      title={correcting ? 'Correct result' : 'Record result'}
       subtitle={`${tournament.name} · Round ${match.round} · Match ${match.slot + 1}`}
       onBack={onCancel}
       footer={
         <Btn
-          title="Review & confirm result"
-          disabled={!valid}
+          title={correcting ? 'Review correction' : 'Review & confirm result'}
+          disabled={!valid || (correcting && first === match.s1 && second === match.s2)}
           onPress={() => onSave(first, second)}
         />
       }
     >
+      {correcting ? (
+        <Text style={[styles.muted, { marginBottom: 16 }]}>
+          Saved score: {match.s1}–{match.s2}. Winner changes are blocked if they affect a later
+          match with a confirmed result. Existing draws stay in place.
+        </Text>
+      ) : null}
       <View style={{ marginBottom: 24 }}>
         <StatusBadge label={displayScoringLabel(rule, tournament.first_to_label)} />
         <Text style={[styles.muted, { marginTop: 6 }]}>

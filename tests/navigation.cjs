@@ -6,7 +6,8 @@ const code = ts.transpileModule(fs.readFileSync('src/navigation.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 new Function('exports', 'require', 'module', code)(moduleObject.exports, require, moduleObject);
-const { parseRouteId, tournamentPath, tournamentRedirect, canScoreMatch } = moduleObject.exports;
+const { parseRouteId, tournamentPath, tournamentRedirect, canScoreMatch, canCorrectMatch } =
+  moduleObject.exports;
 
 for (const invalid of [
   undefined,
@@ -60,6 +61,15 @@ for (const status of ['done', 'bye'])
 assert.equal(canScoreMatch(active, { ...ready, tournament_id: 99 }), false);
 assert.equal(canScoreMatch(active, { ...ready, p1: null }), false);
 assert.equal(canScoreMatch(active, { ...ready, p2: null }), false);
+const done = { ...ready, status: 'done' };
+assert.equal(canCorrectMatch(active, done), true);
+assert.equal(canCorrectMatch(complete, done), true);
+assert.equal(canCorrectMatch(setup, done), false);
+assert.equal(canCorrectMatch(active, ready), false);
+assert.equal(canCorrectMatch(active, undefined), false);
+assert.equal(canCorrectMatch(active, { ...done, status: 'bye' }), false);
+assert.equal(canCorrectMatch(active, { ...done, tournament_id: 99 }), false);
+assert.equal(canCorrectMatch(active, { ...done, p1: null }), false);
 console.log(
   'Passed route ID validation, tournament lifecycle redirects, and stale match-link guards.',
 );

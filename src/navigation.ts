@@ -30,3 +30,13 @@ export function canScoreMatch(tournament: Tournament, match: Match | undefined):
     match.p2 !== null
   );
 }
+
+export function canCorrectMatch(tournament: Tournament, match: Match | undefined): match is Match {
+  return (
+    ['active', 'complete'].includes(tournament.status) &&
+    match?.tournament_id === tournament.id &&
+    match.status === 'done' &&
+    match.p1 !== null &&
+    match.p2 !== null
+  );
+}
