@@ -14,10 +14,13 @@ import {
   errorAlert,
 } from '../ui';
 import PlayerCard from '../components/PlayerCard';
+import ReturningPlayerPicker from '../components/ReturningPlayerPicker';
 
 type Props = {
   tournamentName: string;
   players: Player[];
+  returningPlayers: Player[];
+  onAddReturning: (ids: number[]) => void;
   onAdd: (name: string) => void;
   onRename: (id: number, name: string) => void;
   onRemove: (id: number) => void;
@@ -28,6 +31,8 @@ type Props = {
 export default function PlayersScreen({
   tournamentName,
   players,
+  returningPlayers,
+  onAddReturning,
   onAdd,
   onRename,
   onRemove,
@@ -39,6 +44,7 @@ export default function PlayersScreen({
   const [selected, setSelected] = useState<Player | null>(null);
   const [query, setQuery] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [showReturning, setShowReturning] = useState(false);
   const editing = players.find((player) => player.id === editingId);
   const cancelEdit = () => {
     setEditingId(null);
@@ -101,6 +107,20 @@ export default function PlayersScreen({
         />
         {editingId !== null ? <Btn title="Cancel Edit" secondary onPress={cancelEdit} /> : null}
       </Card>
+      <Btn
+        title="Add returning players"
+        icon="user-plus"
+        secondary
+        disabled={editingId !== null}
+        onPress={() => setShowReturning(true)}
+      />
+      {showReturning ? (
+        <ReturningPlayerPicker
+          players={returningPlayers}
+          onAdd={onAddReturning}
+          onClose={() => setShowReturning(false)}
+        />
+      ) : null}
       <SectionHeading title="On the roster" detail={`${players.length} registered`} />
       {players.length > 8 ? (
         <Field
