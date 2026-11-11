@@ -62,6 +62,16 @@ Knockout organizers may override the default rule independently for preliminary 
 
 Draw preview lists opening matches, BYE recipients, matches to play, the number of players remaining afterward, and scoring by round. BYEs advance automatically with no score. New matches store their own scoring mode, value, and winning target when the draw is confirmed. Settings lock after starting, so every later score uses that saved match rule.
 
+## Returning player registration
+
+During tournament setup, open **Players → Add returning players**. Search names from earlier registrations, select several, and choose **Add selected players**. Selection stays available while searching; closing the picker cancels the selection without saving. Names already registered in the current event are hidden. Repeated names across past events appear once, ignoring capitalization and surrounding whitespace. This is name reuse, not a unique person identity system; two people with the same name need distinct registration names.
+
+Each added name gets an independent player record for the new event. Editing or removing that registration does not rename players in previous tournaments or change historical matches. Source records must still exist when adding; deleted selections, repeated IDs, duplicate names, and registrations after starting are rejected. A batch is saved in one SQLite transaction or not at all. Dynamic Knockout's 128-player limit includes existing registrations and the entire selected batch. Registration order follows selection order and appends to the current roster.
+
+No schema migration, new dependency, or backup format change is required. Returning names come from existing player rows; deleting every registration containing a name can remove it from the available list. Automated checks cover independent IDs, historical results, Unicode, duplicate handling, batch rollback, ordering, all formats, lifecycle locks, the Dynamic Knockout limit, backup restore, and file-backed restart persistence.
+
+Expo Go emulator verification exercised the real registration screen and picker: existing-name exclusion, selection cancellation, and adding two returning names to an event with one registration. A temporary native SQLite test harness checked independent IDs, renaming the copied record without changing completed source history, backup validation, and persistence after force-stopping/reopening Expo Go. Test records were removed with an unchanged-data check. The harness is not shipped. Physical-phone testing was deferred at the owner's request; keyboard/search interactions, TalkBack, and APK acceptance still need manual testing.
+
 ## Correcting match results
 
 Open a tournament's **Matches** view and tap a played match marked **Correct result**, or tap a played match in the standard knockout bracket. The saved scores are prefilled. Adjust them, choose **Review correction**, and confirm. To reach an earlier match, choose its round or **All rounds**. Cancel or Back leaves the saved result unchanged.
@@ -181,6 +191,7 @@ src/
   navigation.ts              Route ID validation and lifecycle guards
   components/TournamentRoute.tsx  Shared focus-based data loading and route recovery
   components/MatchCard.tsx    Accessible reusable match summary
+  components/ReturningPlayerPicker.tsx  Search and multiple selection of returning names
   components/KnockoutBracket.tsx  Scrollable connected knockout diagram
   components/ScoringRuleEditor.tsx  First-to / Best-of rule controls
   bracket.ts                 Pure bracket layout and connector geometry
@@ -209,6 +220,7 @@ tests/
   navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
   corrections.cjs             Score correction, downstream protection, and restart checks
+  players.cjs                 Reusable registrations, isolation, limits, and persistence
   backup.cjs                  Restore simulations, rollback, restart, and file API checks
 app.json                      Android-only Expo configuration
 eas.json                      APK and AAB build profiles
@@ -224,7 +236,7 @@ Schema version 2 adds scoring configuration and per-match scoring snapshots in a
 
 Legacy knockout draws with empty first-round matches are flagged, but their draws and recorded results are not rewritten. Create a new tournament to use the corrected BYE algorithm. Backup validation rejects inconsistent legacy draws rather than importing broken advancement; such records can also prevent a full export. Validation errors do not alter existing data. Uninstalling the application or clearing its data can remove local tournament history; save a backup outside the app beforehand.
 
-- Player changes are allowed only during setup. Reusable player selection is not implemented. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
+- Player changes are allowed only during setup. Returning names can be selected in batches; each event gets independent player records. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
 - Manual draw assigns players by swapping occupied first-round slots. The number and bracket positions of knockout BYEs are automatic; their recipients can be chosen. Round robin lets you choose first-round opponents and the resting player, with later rounds generated automatically so every pair meets once. Unconfirmed draw drafts are discarded when leaving the draw screen.
 - Tournament name, game, format, scoring mode, winning target, and optional round overrides can be edited during setup. Settings lock after starting or if a legacy setup event already has match records. Saving preserves player registrations, tournament identity, and creation time. Cancel and hardware Back discard unsaved changes. New events default to best-of-5; legacy match lengths are retained when editing.
 - Confirmed played scores support guarded corrections; affected played descendants block winner changes. Corrections replace the current result without edit history or undo.

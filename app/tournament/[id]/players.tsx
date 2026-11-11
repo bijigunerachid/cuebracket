@@ -12,6 +12,11 @@ export default function PlayersRoute() {
         <PlayersScreen
           tournamentName={tournament.name}
           players={players}
+          returningPlayers={store.reusablePlayers(tournament.id)}
+          onAddReturning={(ids) => {
+            store.registerReturningPlayers(tournament.id, ids);
+            refresh();
+          }}
           onAdd={(name) => {
             store.addPlayer(tournament.id, name);
             refresh();

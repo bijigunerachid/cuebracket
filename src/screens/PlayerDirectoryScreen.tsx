@@ -81,7 +81,7 @@ export default function PlayerDirectoryScreen() {
       )}
       <Text style={styles.muted}>
         Player registrations belong to their tournament. Historical names stay protected after play
-        starts.
+        starts. During setup, use Add returning players to register previous names again.
       </Text>
     </Page>
   );

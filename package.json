@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/presentation.cjs && node tests/navigation.cjs && node tests/bracket.cjs && node tests/rules.cjs && node tests/tournaments.cjs && node tests/backup.cjs && node tests/corrections.cjs",
+    "test": "node tests/presentation.cjs && node tests/navigation.cjs && node tests/bracket.cjs && node tests/rules.cjs && node tests/tournaments.cjs && node tests/backup.cjs && node tests/corrections.cjs && node tests/players.cjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

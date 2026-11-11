@@ -39,6 +39,62 @@ export const tournament = (id: number) =>
   db.getFirstSync<Tournament>('SELECT * FROM tournaments WHERE id=?', id);
 export const allPlayers = () =>
   db.getAllSync<Player>('SELECT * FROM players ORDER BY name COLLATE NOCASE');
+const playerNameKey = (name: string) => name.trim().toLowerCase();
+
+export function reusablePlayers(id: number): Player[] {
+  if (!tournament(id)) throw Error('Tournament not found');
+  const seen = new Set(participants(id).map((p) => playerNameKey(p.name)));
+  return allPlayers().filter((p) => {
+    const key = playerNameKey(p.name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function registerReturningPlayers(id: number, sourceIds: number[]) {
+  db.withTransactionSync(() => {
+    const t = tournament(id);
+    if (!t || t.status !== 'setup') throw Error('Players can only be added during setup');
+    if (
+      !sourceIds.length ||
+      new Set(sourceIds).size !== sourceIds.length ||
+      sourceIds.some((pid) => !Number.isSafeInteger(pid) || pid < 1)
+    )
+      throw Error('Select each returning player only once');
+    const registered = participants(id);
+    if (
+      t.format === 'dynamic_knockout' &&
+      registered.length + sourceIds.length > MAX_DYNAMIC_PLAYERS
+    )
+      throw Error(`Dynamic Knockout supports at most ${MAX_DYNAMIC_PLAYERS} players`);
+    const sources = new Map(allPlayers().map((p) => [p.id, p]));
+    const names = new Set(registered.map((p) => playerNameKey(p.name)));
+    const selectedNames = sourceIds.map((pid) => {
+      const source = sources.get(pid);
+      if (!source) throw Error('A selected player is no longer available. Reopen the list');
+      const name = source.name.trim();
+      const key = playerNameKey(name);
+      if (!key || names.has(key)) throw Error(`Player already registered: ${name}`);
+      names.add(key);
+      return name;
+    });
+    let position = db.getFirstSync<{ next: number }>(
+      'SELECT COALESCE(MAX(position),-1)+1 next FROM tournament_players WHERE tournament_id=?',
+      id,
+    )!.next;
+    // Copy registrations rather than sharing player rows, so renaming never edits other events.
+    for (const name of selectedNames) {
+      const pid = Number(db.runSync('INSERT INTO players(name) VALUES(?)', name).lastInsertRowId);
+      db.runSync(
+        'INSERT INTO tournament_players(tournament_id,player_id,position) VALUES(?,?,?)',
+        id,
+        pid,
+        position++,
+      );
+    }
+  });
+}
 export const participants = (id: number) =>
   db.getAllSync<Player>(
     'SELECT p.* FROM players p JOIN tournament_players tp ON tp.player_id=p.id WHERE tp.tournament_id=? ORDER BY tp.position,tp.player_id',
@@ -155,7 +211,7 @@ export function addPlayer(id: number, name: string) {
   const existing = participants(id);
   if (t.format === 'dynamic_knockout' && existing.length >= MAX_DYNAMIC_PLAYERS)
     throw Error(`Dynamic Knockout supports at most ${MAX_DYNAMIC_PLAYERS} players`);
-  if (existing.some((p) => p.name.toLowerCase() === trimmed.toLowerCase()))
+  if (existing.some((p) => playerNameKey(p.name) === playerNameKey(trimmed)))
     throw Error('Player already registered');
   db.withTransactionSync(() => {
     const pid = Number(db.runSync('INSERT INTO players(name) VALUES(?)', trimmed).lastInsertRowId);
@@ -214,7 +270,7 @@ export function renamePlayer(id: number, pid: number, name: string) {
     const registered = participants(id);
     if (!registered.some((p) => p.id === pid))
       throw Error('Player not registered in this tournament');
-    if (registered.some((p) => p.id !== pid && p.name.toLowerCase() === trimmed.toLowerCase()))
+    if (registered.some((p) => p.id !== pid && playerNameKey(p.name) === playerNameKey(trimmed)))
       throw Error('Player already registered');
     // Legacy databases may share a player across tournaments. Do not rename history.
     const otherRegistration = db.getFirstSync<{ n: number }>(
