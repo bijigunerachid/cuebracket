@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { validateBackup, type Backup, type Registration } from './backup';
 import {
   Format,
   Game,
@@ -45,6 +46,84 @@ export const participants = (id: number) =>
   );
 export const matches = (id: number) =>
   db.getAllSync<Match>('SELECT * FROM matches WHERE tournament_id=? ORDER BY round,slot', id);
+
+export function exportBackup(): Backup {
+  let backup!: Backup;
+  db.withTransactionSync(() => {
+    backup = validateBackup({
+      app: 'CueBracket',
+      version: 1,
+      createdAt: new Date().toISOString(),
+      tournaments: tournaments(),
+      players: allPlayers(),
+      registrations: db.getAllSync<Registration>(
+        'SELECT * FROM tournament_players ORDER BY tournament_id,position',
+      ),
+      matches: db.getAllSync<Match>('SELECT * FROM matches ORDER BY tournament_id,round,slot'),
+    });
+  });
+  return backup;
+}
+
+// Append only: IDs from another phone never overwrite local records. Every write is atomic.
+export function importBackup(value: unknown) {
+  const backup = validateBackup(value);
+  db.withTransactionSync(() => {
+    const playerIds = new Map<number, number>();
+    const tournamentIds = new Map<number, number>();
+    for (const p of backup.players)
+      playerIds.set(
+        p.id,
+        Number(db.runSync('INSERT INTO players(name) VALUES(?)', p.name).lastInsertRowId),
+      );
+    for (const t of backup.tournaments) {
+      const id = Number(
+        db.runSync(
+          'INSERT INTO tournaments(name,game,format,best_of,status,created_at,scoring_mode,first_to_label,round_rules) VALUES(?,?,?,?,?,?,?,?,?)',
+          t.name,
+          t.game,
+          t.format,
+          t.best_of,
+          t.status,
+          t.created_at,
+          t.scoring_mode!,
+          t.first_to_label!,
+          t.round_rules!,
+        ).lastInsertRowId,
+      );
+      tournamentIds.set(t.id, id);
+    }
+    for (const r of backup.registrations)
+      db.runSync(
+        'INSERT INTO tournament_players(tournament_id,player_id,position) VALUES(?,?,?)',
+        tournamentIds.get(r.tournament_id)!,
+        playerIds.get(r.player_id)!,
+        r.position,
+      );
+    const player = (id: number | null) => (id === null ? null : playerIds.get(id)!);
+    for (const m of backup.matches)
+      db.runSync(
+        'INSERT INTO matches(tournament_id,round,slot,p1,p2,s1,s2,winner,status,target,scoring_mode,scoring_value) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+        tournamentIds.get(m.tournament_id)!,
+        m.round,
+        m.slot,
+        player(m.p1),
+        player(m.p2),
+        m.s1,
+        m.s2,
+        player(m.winner),
+        m.status,
+        m.target!,
+        m.scoring_mode!,
+        m.scoring_value!,
+      );
+  });
+  return {
+    tournaments: backup.tournaments.length,
+    players: backup.players.length,
+    matches: backup.matches.length,
+  };
+}
 export function createTournament(
   name: string,
   game: Game,

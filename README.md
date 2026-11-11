@@ -13,6 +13,7 @@ Normal tournament operation uses local storage and does not require an account o
 - Random BYE recipients and opponents for arbitrary player counts of at least two, manual assignment overrides, draw totals, and optional round-specific scoring.
 - Round-robin scheduling and standings based on wins and rack/frame difference. Tied leaders are shown without declaring a champion.
 - SQLite tournament history, transactions, schema migration, validation triggers, and startup retry handling.
+- Offline JSON backup export and append-only restore, with validation, import preview, ID remapping, and transactional rollback.
 - The Tournaments tab includes name search, combined status/game filters, result counts, creation dates, and Clear filters. Filters stay selected while navigating within the current session and reset when the library screen is remounted; filtering never deletes stored events.
 - Home, Tournaments, Players, and Settings bottom tabs, a guided setup flow, contextual action sheets, fixed primary actions, live progress, and accessible score controls share a premium dark emerald design system. Home statistics and pending matches come from stored events; no example data is inserted.
 
@@ -60,6 +61,16 @@ The First-to label is configurable. Choosing `A` displays `A3` for first to 3, `
 Knockout organizers may override the default rule independently for preliminary rounds, quarterfinals, semifinals, and the final. The opening round with BYEs is classified as preliminary. Later stages follow the remaining bracket rounds; stages absent from a small event are not used. Larger earlier rounds also use the preliminary rule. Unconfigured stages inherit the default. Round robin always uses its default rule for every match.
 
 Draw preview lists opening matches, BYE recipients, matches to play, the number of players remaining afterward, and scoring by round. BYEs advance automatically with no score. New matches store their own scoring mode, value, and winning target when the draw is confirmed. Settings lock after starting, so every later score uses that saved match rule.
+
+## Backup and restore
+
+Open **Settings → Backup & restore → Export backup**, then choose a save or share destination in Android. Save the file outside CueBracket (for example in Downloads or on another device). Closing the share sheet does not confirm a saved copy. Files kept only in the app's cache are temporary and will not survive clearing app data or uninstalling. Backups contain player names and results in unencrypted JSON; choose the destination accordingly.
+
+To restore, choose a CueBracket JSON file, review its date and record counts, then select **Import tournaments** and confirm. Imported events are added as separate copies with new IDs; existing tournaments are never replaced. Importing the same file again creates additional copies. Setup, active, and completed tournaments retain registrations, dates, scoring rules, BYEs, match progress, and results. Imported active events can continue normally. The file is validated before writing, and all import writes use one SQLite transaction. No database schema change is required.
+
+Backup format version 1 supports files up to 10 MB, 1,000 tournaments, 10,000 player records, 50,000 registrations, and 50,000 matches per file. Unsupported versions, malformed files, invalid references, and inconsistent draws/results are rejected. These are backup safety limits, separate from the existing Dynamic Knockout limit of 128 participants. Exports exceeding these limits fail without changing stored data.
+
+Automated restore tests cover every knockout and Dynamic Knockout size from 2–128, round robin from 2–12, continued play, scoring overrides, Unicode names, ID collisions, repeated imports, malformed files, rollback, and reopening a file-backed SQLite database. On Android, test saving through the share sheet, picker cancellation, importing a saved local file in airplane mode, preview cancellation, repeat imports, and continuing an imported event after closing/reopening the app. Verify the original event remains unchanged. Native file-provider behavior still requires device testing.
 
 ## Installation and development
 
@@ -169,7 +180,7 @@ src/
   presentation.ts             Scoring labels and SQLite UTC date presentation
   screens/TournamentApp.tsx   Home and searchable tournament library
   screens/PlayerDirectoryScreen.tsx    Registrations grouped by tournament
-  screens/AppSettingsScreen.tsx        App, theme, and storage information
+  screens/AppSettingsScreen.tsx        App, theme, and backup/import controls
   screens/TournamentDetailScreen.tsx   Details, rounds, and standings
   screens/MatchScoreScreen.tsx         Responsive score controls
   screens/TournamentResultsScreen.tsx  Champion/tied leaders and final standings
@@ -177,6 +188,8 @@ src/
   screens/DrawScreen.tsx      Random draw preview and direct slot selection
   screens/TournamentSettingsScreen.tsx  Shared creation and setup editing form
   db.ts                       SQLite schema, migration, CRUD, advancement, standings
+  backup.ts                   Versioned backup validation and schedule integrity checks
+  backupFiles.ts              Native file picker and backup sharing
   engine.ts                   Types, draws, scheduling, and validation
   ui.tsx                      Theme and reusable controls
 tests/
@@ -185,6 +198,7 @@ tests/
   bracket.cjs                 Bracket geometry and font-scale layout checks
   navigation.cjs              Route validation and lifecycle guard checks
   tournaments.cjs             Engine and SQLite regression checks
+  backup.cjs                  Restore simulations, rollback, restart, and file API checks
 app.json                      Android-only Expo configuration
 eas.json                      APK and AAB build profiles
 package-lock.json             Locked dependency versions
@@ -197,7 +211,7 @@ SQLite stores data in `cuebracket.db` on the device. Schema version 1 normalizes
 
 Schema version 2 adds scoring configuration and per-match scoring snapshots in a transaction. Existing tournament IDs, registrations, pairings, scores, winners, and statuses are preserved. Legacy tournaments remain Best-of; existing matches receive the corresponding legacy targets. Migration errors roll back and can be retried. The legacy `best_of` column remains an odd equivalent length for compatibility; for First-to rules the UI and saved scoring mode determine the displayed meaning. Existing tournament histories and confirmed draws are not reshuffled.
 
-Legacy knockout draws with empty first-round matches are flagged, but their draws and recorded results are not rewritten. Create a new tournament to use the corrected BYE algorithm. Uninstalling the application or clearing its data can remove local tournament history; backup and restore are not implemented.
+Legacy knockout draws with empty first-round matches are flagged, but their draws and recorded results are not rewritten. Create a new tournament to use the corrected BYE algorithm. Backup validation rejects inconsistent legacy draws rather than importing broken advancement; such records can also prevent a full export. Validation errors do not alter existing data. Uninstalling the application or clearing its data can remove local tournament history; save a backup outside the app beforehand.
 
 - Player changes are allowed only during setup. Reusable player selection is not implemented. Shared legacy player records or records referenced by matches cannot be renamed, to protect other tournaments and history. Each registration creates a player record; unreferenced records are cleaned up when registrations or tournaments are removed.
 - Manual draw assigns players by swapping occupied first-round slots. The number and bracket positions of knockout BYEs are automatic; their recipients can be chosen. Round robin lets you choose first-round opponents and the resting player, with later rounds generated automatically so every pair meets once. Unconfirmed draw drafts are discarded when leaving the draw screen.

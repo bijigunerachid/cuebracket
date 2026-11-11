@@ -18,6 +18,9 @@ function load(file, requireModule = require) {
 const engine = load('src/engine.ts');
 const rules = load('src/rules.ts', (name) => (name === './engine' ? engine : require(name)));
 const migrations = load('src/migrations.ts');
+const backup = load('src/backup.ts', (name) =>
+  name === './engine' ? engine : name === './rules' ? rules : require(name),
+);
 const bracket = load('src/bracket.ts');
 let sql = new DatabaseSync(':memory:');
 const adapter = {
@@ -48,7 +51,9 @@ const store = load('src/db.ts', (name) =>
         ? rules
         : name === './migrations'
           ? migrations
-          : require(name),
+          : name === './backup'
+            ? backup
+            : require(name),
 );
 // Simulate the unversioned schema already installed on an organizer's device.
 const schema = fs.readFileSync('src/db.ts', 'utf8').match(/db\.execSync\(`([\s\S]*?)`\)/)[1];
@@ -636,7 +641,9 @@ function reopenStore() {
           ? rules
           : name === './migrations'
             ? migrations
-            : require(name),
+            : name === './backup'
+              ? backup
+              : require(name),
   );
   reopened.init();
   return reopened;
