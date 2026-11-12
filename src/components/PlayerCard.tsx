@@ -1,7 +1,7 @@
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
 import AppIcon from './AppIcon';
 import type { Player } from '../engine';
-import { Avatar, C, styles } from '../ui';
+import { Avatar, C, MotionPressable, styles } from '../ui';
 export default function PlayerCard({
   player,
   detail,
@@ -24,14 +24,14 @@ export default function PlayerCard({
         {detail ? <Text style={styles.muted}>{detail}</Text> : null}
       </View>
       {onActions ? (
-        <TouchableOpacity
+        <MotionPressable
           onPress={onActions}
           accessibilityRole="button"
           accessibilityLabel={`Actions for ${player.name}`}
           style={{ minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' }}
         >
           <AppIcon name="more-horizontal" color={C.muted} />
-        </TouchableOpacity>
+        </MotionPressable>
       ) : null}
     </View>
   );

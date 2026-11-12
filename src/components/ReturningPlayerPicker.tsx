@@ -1,23 +1,33 @@
-import { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 import type { Player } from '../engine';
-import { BottomSheet, Btn, C, Field, styles } from '../ui';
+import { BottomSheet, Btn, C, Field, MotionPressable, styles } from '../ui';
 import AppIcon from './AppIcon';
 
 export default function ReturningPlayerPicker({
   players,
   onAdd,
   onClose,
+  visible = true,
 }: {
   players: Player[];
   onAdd: (ids: number[]) => void;
   onClose: () => void;
+  visible?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<number[]>([]);
   const [limit, setLimit] = useState(30);
   const [error, setError] = useState<string | null>(null);
-  const visible = players.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
+  useEffect(() => {
+    if (visible) {
+      setQuery('');
+      setSelected([]);
+      setLimit(30);
+      setError(null);
+    }
+  }, [visible]);
+  const filtered = players.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
   const add = () => {
     try {
       onAdd(selected);
@@ -27,7 +37,7 @@ export default function ReturningPlayerPicker({
     }
   };
   return (
-    <BottomSheet visible title="Returning players" onClose={onClose}>
+    <BottomSheet visible={visible} title="Returning players" onClose={onClose}>
       <Text style={[styles.muted, { marginTop: 12 }]}>
         Choose names from previous registrations. Players already on this roster are hidden. Each
         tournament keeps its own names.
@@ -42,7 +52,7 @@ export default function ReturningPlayerPicker({
         }}
       />
       <Text style={styles.muted} accessibilityLiveRegion="polite">
-        {selected.length} selected · {visible.length} available
+        {selected.length} selected · {filtered.length} available
       </Text>
       <Btn
         title={`Add selected players (${selected.length})`}
@@ -55,17 +65,18 @@ export default function ReturningPlayerPicker({
           {error}
         </Text>
       ) : null}
-      {!visible.length ? (
+      {!filtered.length ? (
         <Text style={[styles.muted, { marginTop: 16 }]}>
           {players.length
             ? 'No matching players. Try another name.'
             : 'No returning players available. Add a new name on the Players screen.'}
         </Text>
       ) : null}
-      {visible.slice(0, limit).map((player) => {
+      {filtered.slice(0, limit).map((player) => {
         const checked = selected.includes(player.id);
         return (
-          <TouchableOpacity
+          <MotionPressable
+            haptic="selection"
             key={player.id}
             accessibilityRole="checkbox"
             accessibilityLabel={player.name}
@@ -102,10 +113,10 @@ export default function ReturningPlayerPicker({
               {checked ? <AppIcon name="check" size={18} color={C.green} /> : null}
             </View>
             <Text style={[styles.text, { flex: 1 }]}>{player.name}</Text>
-          </TouchableOpacity>
+          </MotionPressable>
         );
       })}
-      {visible.length > limit ? (
+      {filtered.length > limit ? (
         <Btn
           title="Show more players"
           secondary

@@ -67,6 +67,7 @@ export default function TournamentApp({ library = false }: { library?: boolean }
   return (
     <Page
       title={library ? 'Tournaments' : 'CueBracket'}
+      brand={!library}
       subtitle={library ? 'Draws and tournament history' : '8-Ball Pool & Snooker'}
     >
       {error ? (

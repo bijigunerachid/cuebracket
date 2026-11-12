@@ -1,14 +1,17 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AccessibilityInfo,
   ActivityIndicator,
   Animated,
+  Easing,
+  Image,
+  Keyboard,
+  findNodeHandle,
   Modal,
   Pressable,
   View,
   Text,
-  TouchableOpacity,
   TextInput,
   ScrollView,
   StyleSheet,
@@ -18,6 +21,15 @@ import {
 } from 'react-native';
 import { theme } from './theme';
 import AppIcon, { type IconName } from './components/AppIcon';
+import { MotionPressable, Reveal, useFeedback, useReducedMotion } from './motion';
+export {
+  MotionProvider,
+  MotionPressable,
+  Reveal,
+  useFeedback,
+  useListMotion,
+  useReducedMotion,
+} from './motion';
 export { theme };
 export const C = theme.colors;
 export const styles = StyleSheet.create({
@@ -91,68 +103,37 @@ export const styles = StyleSheet.create({
   pillOn: { borderBottomColor: C.green, backgroundColor: C.raised },
   pillText: { color: C.white, fontWeight: '600', fontSize: 14 },
 });
-const MotionContext = createContext(true);
-export const useReducedMotion = () => useContext(MotionContext);
-export function MotionProvider({ children }: React.PropsWithChildren) {
-  const [reduced, setReduced] = useState(true);
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((value) => {
-        if (mounted) setReduced(value);
-      })
-      .catch(() => {});
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-  return <MotionContext.Provider value={reduced}>{children}</MotionContext.Provider>;
-}
-export function Reveal({
-  children,
-  change,
-}: React.PropsWithChildren<{ change?: string | number }>) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const reduced = useReducedMotion();
-  useEffect(() => {
-    if (reduced) {
-      opacity.setValue(1);
-      return;
-    }
-    opacity.setValue(0.65);
-    const animation = Animated.timing(opacity, {
-      toValue: 1,
-      duration: theme.motion.reveal,
-      useNativeDriver: true,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [change, opacity, reduced]);
-  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
-}
 export function AppHeader({
   title,
   subtitle,
   onBack,
+  brand,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  brand?: boolean;
 }) {
   return (
     <View style={{ marginBottom: 16 }}>
       <View style={[styles.row, { minHeight: 48 }]}>
         {onBack ? (
-          <TouchableOpacity
+          <MotionPressable
             onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             style={{ minWidth: 48, minHeight: 48, justifyContent: 'center' }}
           >
             <AppIcon name="arrow-left" />
-          </TouchableOpacity>
+          </MotionPressable>
+        ) : null}
+        {brand ? (
+          <Image
+            source={require('../assets/brand/cuebracket-logo.png')}
+            style={{ width: 52, height: 52 }}
+            resizeMode="contain"
+            accessible={false}
+          />
         ) : null}
         <Text accessibilityRole="header" style={[styles.title, { flex: 1 }]}>
           {title}
@@ -169,12 +150,14 @@ export function Page({
   onBack,
   scrollToTopKey,
   footer,
+  brand,
 }: React.PropsWithChildren<{
   title: string;
   subtitle?: string;
   onBack?: () => void;
   scrollToTopKey?: string | number | null;
   footer?: React.ReactNode;
+  brand?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
   const scroll = useRef<ScrollView>(null);
@@ -194,7 +177,7 @@ export function Page({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <AppHeader title={title} subtitle={subtitle} onBack={onBack} />
+        <AppHeader title={title} subtitle={subtitle} onBack={onBack} brand={brand} />
         {children}
       </ScrollView>
       {footer ? (
@@ -223,6 +206,7 @@ export function Btn({
   danger,
   icon,
   iconOnly,
+  haptic,
 }: {
   title: string;
   onPress: () => void;
@@ -232,11 +216,11 @@ export function Btn({
   danger?: boolean;
   icon?: IconName;
   iconOnly?: boolean;
+  haptic?: 'selection' | 'confirm';
 }) {
-  const reduced = useReducedMotion();
   return (
-    <TouchableOpacity
-      activeOpacity={reduced ? 1 : 0.7}
+    <MotionPressable
+      haptic={haptic}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: !!disabled }}
@@ -267,7 +251,7 @@ export function Btn({
           {title}
         </Text>
       ) : null}
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }
 export const PrimaryButton = (props: React.ComponentProps<typeof Btn>) => <Btn {...props} />;
@@ -283,21 +267,27 @@ export function Choice<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const feedback = useFeedback();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
       {options.map((option) => (
-        <TouchableOpacity
+        <MotionPressable
           accessibilityRole="radio"
           accessibilityLabel={option.label}
           accessibilityState={{ checked: value === option.value }}
           key={option.value}
-          onPress={() => onChange(option.value)}
+          onPress={() => {
+            if (value !== option.value) {
+              feedback('selection');
+              onChange(option.value);
+            }
+          }}
           style={[styles.pill, value === option.value && styles.pillOn]}
         >
           <Text style={[styles.pillText, value === option.value && { color: C.green }]}>
             {option.label}
           </Text>
-        </TouchableOpacity>
+        </MotionPressable>
       ))}
     </View>
   );
@@ -446,43 +436,118 @@ export function BottomSheet({
   children,
 }: React.PropsWithChildren<{ visible: boolean; title: string; onClose: () => void }>) {
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+  const [present, setPresent] = useState(visible);
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const previousVisible = useRef(visible);
+  const heading = useRef<Text>(null);
+  const closeCallback = useRef(onClose);
+  closeCallback.current = onClose;
+  const animate = useCallback(
+    (open: boolean, notify = false) => {
+      progress.stopAnimation();
+      closingRef.current = !open;
+      setClosing(!open);
+      if (!open) Keyboard.dismiss();
+      const finish = ({ finished }: { finished: boolean }) => {
+        if (!finished) return;
+        if (open) {
+          const handle = findNodeHandle(heading.current);
+          if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
+        } else {
+          setPresent(false);
+          if (notify) closeCallback.current();
+        }
+      };
+      if (reduced) {
+        progress.setValue(open ? 1 : 0);
+        finish({ finished: true });
+      } else
+        Animated.timing(progress, {
+          toValue: open ? 1 : 0,
+          duration: theme.motion.sheet,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(finish);
+    },
+    [progress, reduced],
+  );
+  useEffect(() => {
+    const reopening = visible && !previousVisible.current;
+    previousVisible.current = visible;
+    if (visible) {
+      setPresent(true);
+      if (present) {
+        // A motion-setting change must finish an in-flight dismissal, not reopen it.
+        if (closingRef.current && !reopening) animate(false, true);
+        else animate(true);
+      }
+    } else if (present) animate(false);
+  }, [visible, present, animate]);
+  useEffect(() => () => progress.stopAnimation(), [progress]);
+  const dismiss = () => {
+    if (!closingRef.current) animate(false, true);
+  };
+  if (!present) return null;
   return (
     <Modal
-      visible={visible}
+      visible={present}
       transparent
       animationType="none"
-      onRequestClose={onClose}
-      onShow={() => AccessibilityInfo.announceForAccessibility(title)}
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={dismiss}
+      onShow={() => {
+        if (!closingRef.current) animate(true);
+      }}
     >
-      <KeyboardAvoidingView
-        behavior="height"
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000099' }}
-      >
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: '#000000',
+              opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
+            },
+          ]}
+        />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Dismiss actions"
-          onPress={onClose}
+          accessibilityLabel={`Close ${title}`}
+          onPress={dismiss}
           style={StyleSheet.absoluteFill}
         />
-        <View
+        <Animated.View
+          pointerEvents={closing ? 'none' : 'auto'}
           accessibilityViewIsModal
-          style={{
-            backgroundColor: C.card,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            padding: 24,
-            paddingBottom: insets.bottom + 24,
-            maxHeight: '85%',
-          }}
+          style={[
+            {
+              backgroundColor: C.card,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 24,
+              paddingBottom: insets.bottom + 24,
+              maxHeight: '85%',
+            },
+            {
+              opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }),
+              transform: [
+                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) },
+              ],
+            },
+          ]}
         >
           <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-            <Text accessibilityRole="header" style={styles.heading}>
+            <Text ref={heading} accessible accessibilityRole="header" style={styles.heading}>
               {title}
             </Text>
             {children}
-            <Btn title="Close" secondary onPress={onClose} />
+            <Btn title="Close" secondary onPress={dismiss} />
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -523,7 +588,7 @@ export function ScoreDisplay({
   onNameLayout?: (height: number) => void;
 }) {
   return (
-    <Reveal change={score}>
+    <Reveal change={score} kind="score">
       <View style={{ alignItems: 'center' }}>
         <View style={{ minHeight: nameHeight, width: '100%', justifyContent: 'center' }}>
           <Text

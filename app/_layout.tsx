@@ -22,7 +22,21 @@ function Navigation() {
             animation: reducedMotion ? 'none' : 'slide_from_right',
             contentStyle: { backgroundColor: C.bg },
           }}
-        />
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="create"
+            options={{ animation: reducedMotion ? 'none' : 'fade_from_bottom' }}
+          />
+          <Stack.Screen
+            name="tournament/[id]/match/[matchId]"
+            options={{ animation: reducedMotion ? 'none' : 'fade_from_bottom' }}
+          />
+          <Stack.Screen
+            name="tournament/[id]/results"
+            options={{ animation: reducedMotion ? 'none' : 'fade' }}
+          />
+        </Stack>
       </DatabaseGate>
     </>
   );

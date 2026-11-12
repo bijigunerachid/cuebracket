@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { ScrollView, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { buildKnockoutLayout } from '../bracket';
 import type { Match, Player } from '../engine';
-import { C, Card, styles } from '../ui';
+import { C, Card, MotionPressable, styles } from '../ui';
 
 type Props = { matches: Match[]; players: Player[]; onScore?: (match: Match) => void };
 
@@ -110,7 +110,8 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
               const winner = match.winner === null ? null : (names.get(match.winner) ?? 'Unknown');
               const label = `Round ${match.round}, match ${match.slot + 1}: ${name(match.p1)} versus ${name(match.p2)}, ${match.status}${match.status === 'done' ? `, score ${match.s1} to ${match.s2}` : ''}${winner ? `, winner ${winner}` : ''}${ready ? ', tap to enter score' : ''}`;
               return (
-                <TouchableOpacity
+                <MotionPressable
+                  haptic="selection"
                   key={match.id}
                   disabled={!actionable}
                   onPress={() => onScore?.(match)}
@@ -189,7 +190,7 @@ export default function KnockoutBracket({ matches, players, onScore }: Props) {
                             : 'Final result'
                           : 'Waiting for opponents'}
                   </Text>
-                </TouchableOpacity>
+                </MotionPressable>
               );
             })}
           </View>

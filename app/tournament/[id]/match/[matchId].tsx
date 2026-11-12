@@ -10,9 +10,10 @@ import {
   parseRouteId,
   tournamentPath,
 } from '../../../../src/navigation';
-import { errorAlert } from '../../../../src/ui';
+import { errorAlert, useFeedback } from '../../../../src/ui';
 
 export default function ScoreRoute() {
+  const feedback = useFeedback();
   const params = useLocalSearchParams<{ matchId?: string | string[] }>();
   const matchId = parseRouteId(params.matchId);
   return (
@@ -43,6 +44,7 @@ export default function ScoreRoute() {
                         if (correcting)
                           store.correctResult(tournament.id, match.id, first, second, match);
                         else store.saveResult(tournament.id, match.id, first, second);
+                        feedback('confirm');
                         router.dismissTo(path);
                       } catch (error) {
                         errorAlert(error);

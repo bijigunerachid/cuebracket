@@ -1,8 +1,8 @@
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { formatLabel, type Tournament } from '../engine';
 import { baseScoringRule } from '../rules';
 import { createdDate, displayScoringLabel } from '../presentation';
-import { C, Progress, styles } from '../ui';
+import { C, MotionPressable, Progress, styles } from '../ui';
 import AppIcon from './AppIcon';
 
 export default function TournamentCard({
@@ -21,7 +21,7 @@ export default function TournamentCard({
         ? 'Completed'
         : 'Setup';
   return (
-    <TouchableOpacity
+    <MotionPressable
       accessibilityRole="button"
       accessibilityLabel={`Open ${tournament.name}, ${status}`}
       onPress={onPress}
@@ -59,6 +59,6 @@ export default function TournamentCard({
           label={`${progress.done} / ${progress.total} drawn matches played`}
         />
       ) : null}
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }

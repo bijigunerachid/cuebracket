@@ -19,5 +19,5 @@ export const theme = {
   elevation: { flat: 0, floating: 4 },
   icon: { small: 18, medium: 24, large: 32 },
   touch: 48,
-  motion: { press: 100, reveal: 180 },
+  motion: { press: 100, selection: 150, reveal: 180, sheet: 260, success: 320 },
 } as const;

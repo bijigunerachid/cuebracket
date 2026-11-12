@@ -4,6 +4,7 @@
     "slug": "cuebracket",
     "scheme": "cuebracket",
     "version": "1.0.0",
+    "icon": "./assets/brand/cuebracket-logo.png",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "androidNavigationBar": {
@@ -15,7 +16,19 @@
       "package": "com.cuebracket.app",
       "edgeToEdgeEnabled": true
     },
-    "plugins": ["expo-router", "expo-sqlite"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/cuebracket-logo.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0F0D"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": false
     },

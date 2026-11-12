@@ -2,16 +2,23 @@ import { Tabs } from 'expo-router';
 import { useWindowDimensions } from 'react-native';
 import TabIcon from '../../src/components/TabIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C } from '../../src/ui';
+import { C, theme, useFeedback, useReducedMotion } from '../../src/ui';
 
 export default function MainTabs() {
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
+  const reduced = useReducedMotion();
+  const feedback = useFeedback();
   return (
     <Tabs
       backBehavior="initialRoute"
       screenOptions={{
         headerShown: false,
+        animation: reduced ? 'none' : 'fade',
+        transitionSpec: {
+          animation: 'timing',
+          config: { duration: reduced ? 0 : theme.motion.selection },
+        },
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: C.green,
         tabBarInactiveTintColor: C.muted,
@@ -37,6 +44,11 @@ export default function MainTabs() {
         <Tabs.Screen
           key={tab.name}
           name={tab.name}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              if (!navigation.isFocused()) feedback('selection');
+            },
+          })}
           options={{
             title: tab.title,
             tabBarAccessibilityLabel: tab.title,

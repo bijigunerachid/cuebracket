@@ -1,6 +1,6 @@
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { Match, Player } from '../engine';
-import { C, styles } from '../ui';
+import { C, MotionPressable, styles } from '../ui';
 import AppIcon from './AppIcon';
 
 export default function MatchCard({
@@ -21,7 +21,8 @@ export default function MatchCard({
   const actionable = ready || correcting;
   const bye = match.status === 'bye';
   return (
-    <TouchableOpacity
+    <MotionPressable
+      haptic="selection"
       disabled={!actionable}
       onPress={onPress}
       accessibilityRole={actionable ? 'button' : 'text'}
@@ -95,6 +96,6 @@ export default function MatchCard({
         </Text>
         {actionable ? <AppIcon name="chevron-right" size={18} color={C.muted} /> : null}
       </View>
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }

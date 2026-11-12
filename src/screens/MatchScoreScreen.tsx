@@ -77,6 +77,7 @@ export default function MatchScoreScreen({
                   <View style={{ flex: 1 }}>
                     <Btn
                       title="Decrease"
+                      haptic="selection"
                       icon="minus"
                       iconOnly
                       accessibilityLabel={`Decrease ${name}`}
@@ -88,6 +89,7 @@ export default function MatchScoreScreen({
                   <View style={{ flex: 1 }}>
                     <Btn
                       title="Increase"
+                      haptic="selection"
                       icon="plus"
                       iconOnly
                       accessibilityLabel={`Increase ${name}`}

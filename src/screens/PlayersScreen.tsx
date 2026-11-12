@@ -12,6 +12,8 @@ import {
   SectionHeading,
   styles,
   errorAlert,
+  useListMotion,
+  useFeedback,
 } from '../ui';
 import PlayerCard from '../components/PlayerCard';
 import ReturningPlayerPicker from '../components/ReturningPlayerPicker';
@@ -46,14 +48,18 @@ export default function PlayersScreen({
   const [validation, setValidation] = useState<string | null>(null);
   const [showReturning, setShowReturning] = useState(false);
   const editing = players.find((player) => player.id === editingId);
+  const animateList = useListMotion();
+  const feedback = useFeedback();
   const cancelEdit = () => {
     setEditingId(null);
     setName('');
   };
   const save = () => {
     try {
+      animateList();
       if (editingId !== null) onRename(editingId, name);
       else onAdd(name);
+      feedback('selection');
       cancelEdit();
       setValidation(null);
     } catch (error) {
@@ -62,7 +68,9 @@ export default function PlayersScreen({
   };
   const remove = (id: number) => {
     try {
+      animateList();
       onRemove(id);
+      feedback('selection');
       if (editingId === id) cancelEdit();
     } catch (error) {
       errorAlert(error);
@@ -114,13 +122,16 @@ export default function PlayersScreen({
         disabled={editingId !== null}
         onPress={() => setShowReturning(true)}
       />
-      {showReturning ? (
-        <ReturningPlayerPicker
-          players={returningPlayers}
-          onAdd={onAddReturning}
-          onClose={() => setShowReturning(false)}
-        />
-      ) : null}
+      <ReturningPlayerPicker
+        visible={showReturning}
+        players={returningPlayers}
+        onAdd={(ids) => {
+          animateList();
+          onAddReturning(ids);
+          feedback('confirm');
+        }}
+        onClose={() => setShowReturning(false)}
+      />
       <SectionHeading title="On the roster" detail={`${players.length} registered`} />
       {players.length > 8 ? (
         <Field

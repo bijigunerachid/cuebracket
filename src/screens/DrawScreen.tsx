@@ -35,6 +35,7 @@ import {
   StatusBadge,
   styles,
   C,
+  Reveal,
 } from '../ui';
 
 type Props = {
@@ -151,6 +152,7 @@ export default function DrawScreen({
       {mode === 'random' ? (
         <Btn
           title="Shuffle Again"
+          haptic="selection"
           icon="shuffle"
           secondary
           disabled={!ready}
@@ -239,33 +241,35 @@ export default function DrawScreen({
       <Text style={styles.label}>
         {summary?.byes ? 'PRELIMINARY MATCHES AND BYEs' : 'OPENING ROUND'}
       </Text>
-      {firstRound.map((match) => (
-        <Card key={match.slot}>
-          <View style={[styles.row, { flexWrap: 'wrap' }]}>
-            <Text style={styles.label}>
-              {match.p2 === null ? 'AUTOMATIC ADVANCE' : `MATCH ${match.slot + 1}`}
+      <Reveal change={order.join(',')}>
+        {firstRound.map((match) => (
+          <Card key={match.slot}>
+            <View style={[styles.row, { flexWrap: 'wrap' }]}>
+              <Text style={styles.label}>
+                {match.p2 === null ? 'AUTOMATIC ADVANCE' : `MATCH ${match.slot + 1}`}
+              </Text>
+              <StatusBadge
+                label={match.p2 === null ? 'BYE · No score' : 'Round 1'}
+                tone={match.p2 === null ? 'muted' : 'green'}
+              />
+            </View>
+            {match.p1 !== null ? playerSlot(match.p1, 'Player 1') : null}
+            {match.p2 !== null ? (
+              playerSlot(match.p2, 'Player 2')
+            ) : (
+              <Text style={styles.muted}>BYE - advances automatically</Text>
+            )}
+          </Card>
+        ))}
+        {resting.map((id) => (
+          <Card key={id}>
+            {playerSlot(id, 'Resting player')}
+            <Text style={styles.muted}>
+              No match in round 1. This player remains in the full schedule.
             </Text>
-            <StatusBadge
-              label={match.p2 === null ? 'BYE · No score' : 'Round 1'}
-              tone={match.p2 === null ? 'muted' : 'green'}
-            />
-          </View>
-          {match.p1 !== null ? playerSlot(match.p1, 'Player 1') : null}
-          {match.p2 !== null ? (
-            playerSlot(match.p2, 'Player 2')
-          ) : (
-            <Text style={styles.muted}>BYE - advances automatically</Text>
-          )}
-        </Card>
-      ))}
-      {resting.map((id) => (
-        <Card key={id}>
-          {playerSlot(id, 'Resting player')}
-          <Text style={styles.muted}>
-            No match in round 1. This player remains in the full schedule.
-          </Text>
-        </Card>
-      ))}
+          </Card>
+        ))}
+      </Reveal>
       <Text style={styles.muted}>
         {format !== 'round_robin'
           ? summary?.byes

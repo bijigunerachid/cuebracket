@@ -24,7 +24,7 @@ export default function TournamentResultsScreen({
       : leaders.map((row) => row.player.name).join(' / ') || 'TBD';
   return (
     <Page title="Tournament Results" subtitle={tournament.name} onBack={onMatches}>
-      <Reveal change={tournament.id}>
+      <Reveal change={tournament.id} kind="champion">
         <Card highlight>
           <StatusBadge label="COMPETITION COMPLETE" tone="gold" />
           <Text style={{ color: C.gold, fontSize: 18, textAlign: 'center' }}>
