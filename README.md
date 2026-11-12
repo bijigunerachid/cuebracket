@@ -158,6 +158,8 @@ Before treating a release as ready:
 
 The existing `eas.json` provides an internal APK profile and a production AAB profile.
 
+Use the [Android APK acceptance guide](docs/android-acceptance.md) for source verification, build setup, safe installation, offline scenarios, and the test report. Run `npm.cmd run verify:android` before building; this verifies source and bundling, not an APK. APK acceptance is still pending.
+
 ```powershell
 npx.cmd eas-cli login
 npx.cmd eas-cli build:configure --platform android
