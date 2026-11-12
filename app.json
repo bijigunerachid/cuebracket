@@ -19,6 +19,13 @@
     "experiments": {
       "typedRoutes": false
     },
-    "platforms": ["android"]
+    "platforms": ["android"],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "32743886-63a5-41c0-860e-013d8a9728d9"
+      }
+    },
+    "owner": "biijigune"
   }
 }
